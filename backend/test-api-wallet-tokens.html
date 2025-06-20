@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Wallet Tokens API</title>
+</head>
+<body>
+    <h1>Test Wallet Tokens API</h1>
+    <button onclick="fetchTokens()">Fetch Tokens</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function fetchTokens() {
+            const wallet = '6PP4BH39zThbjRU8XhJ9AwXRqPyGjqCxwftemXYXSwvG';
+            const url = `http://localhost:3001/api/wallet/tokens/${wallet}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                
+                // Log test tokens
+                if (data.success && data.tokens) {
+                    const testTokens = data.tokens.filter(t => t.is_test_token);
+                    console.log('Test tokens found:', testTokens.length);
+                    testTokens.forEach(token => {
+                        console.log(`${token.symbol} (${token.mint}): balance=${token.balance}, decimals=${token.decimals}`);
+                    });
+                }
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

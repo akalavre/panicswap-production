@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Supabase Initialization</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Client Test</h1>
+    <div id="status">Loading...</div>
+    <button onclick="testTokenQuery()">Test Token Query</button>
+    <div id="result"></div>
+
+    <script>
+        // Test Supabase initialization
+        const SUPABASE_URL = 'https://cfficjjdhgqwqprfhlrj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjI0OTcsImV4cCI6MjA2NDUzODQ5N30.IB-rLhiadGguYCTAZoiI60451xLLZ9M23OpfvsBt0mA';
+        
+        let supabaseClient = null;
+        
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+            console.log(message);
+        }
+        
+        // Initialize Supabase
+        if (window.supabase) {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            window.supabaseClient = supabaseClient;
+            updateStatus('✅ Supabase client initialized successfully!');
+        } else {
+            updateStatus('❌ Supabase library not loaded');
+        }
+        
+        async function testTokenQuery() {
+            if (!supabaseClient) {
+                alert('Supabase client not initialized');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Querying...';
+            
+            try {
+                // Test query for WIF token
+                const { data, error } = await supabaseClient
+                    .from('token_metadata')
+                    .select('*')
+                    .eq('mint', '6A5K7dNXPZEkBk9g7JF5cUb6PV4PmrnqBE8HAr4yW4ib')
+                    .single();
+                
+                if (error) {
+                    resultDiv.innerHTML = `<pre style="color: red;">Error: ${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<pre style="color: green;">Success! Found token: ${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `<pre style="color: red;">Exception: ${err.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Token Prices</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/backend-config.js"></script>
+    <script src="assets/js/supabase-client.js"></script>
+    <script src="assets/js/supabase-token-fetcher.js"></script>
+</head>
+<body>
+    <h1>Debug Token Prices</h1>
+    <div id="status"></div>
+    <button id="load-btn">Load Tokens</button>
+    <button id="register-btn">Register with Backend</button>
+    <div id="results"></div>
+    
+    <script>
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+        const loadBtn = document.getElementById('load-btn');
+        const registerBtn = document.getElementById('register-btn');
+        
+        let currentTokens = [];
+        
+        // Load tokens
+        loadBtn.addEventListener('click', async () => {
+            status.innerHTML = '<p>Loading tokens...</p>';
+            
+            try {
+                const walletAddress = localStorage.getItem('walletAddress') || '6PP4BH39zThbjRU8XhJ9AwXRqPyGjqCxwftemXYXSwvG';
+                const tokens = await window.SupabaseTokenFetcher.fetchDashboardTokens(walletAddress);
+                
+                currentTokens = tokens;
+                status.innerHTML = `<p>Loaded ${tokens.length} tokens</p>`;
+                
+                // Display tokens
+                results.innerHTML = '<h2>Tokens:</h2>';
+                tokens.forEach(token => {
+                    results.innerHTML += `
+                        <div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
+                            <strong>${token.symbol}</strong> (${token.token_mint.substring(0, 8)}...)<br>
+                            Price: $${token.price}<br>
+                            Balance: ${token.balance}<br>
+                            Value: $${token.value}<br>
+                            24h Change: ${token.price_change_24h}%
+                        </div>
+                    `;
+                });
+                
+            } catch (error) {
+                status.innerHTML = `<p style="color:red">Error: ${error.message}</p>`;
+                console.error('Load error:', error);
+            }
+        });
+        
+        // Register with backend
+        registerBtn.addEventListener('click', async () => {
+            if (currentTokens.length === 0) {
+                status.innerHTML = '<p style="color:red">Load tokens first!</p>';
+                return;
+            }
+            
+            status.innerHTML = '<p>Registering with backend...</p>';
+            
+            try {
+                const walletAddress = localStorage.getItem('walletAddress') || '6PP4BH39zThbjRU8XhJ9AwXRqPyGjqCxwftemXYXSwvG';
+                const tokenMints = currentTokens.map(t => t.token_mint);
+                
+                const response = await fetch(`${window.BACKEND_URL}/api/dashboard/register-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        walletAddress: walletAddress,
+                        tokenMints: tokenMints
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                status.innerHTML += '<p style="color:green">✅ Registration successful!</p>';
+                
+                // Check prices after a few seconds
+                setTimeout(async () => {
+                    status.innerHTML += '<p>Checking backend prices...</p>';
+                    const pricesResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/check-prices`);
+                    const pricesData = await pricesResponse.json();
+                    status.innerHTML += `<p>Backend has ${pricesData.count} prices</p>`;
+                    
+                    if (pricesData.prices) {
+                        status.innerHTML += '<h3>Backend Prices:</h3>';
+                        pricesData.prices.forEach(p => {
+                            status.innerHTML += `<p>${p.token_mint.substring(0, 8)}...: $${p.price}</p>`;
+                        });
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                status.innerHTML += `<p style="color:red">Registration error: ${error.message}</p>`;
+                console.error('Registration error:', error);
+            }
+        });
+        
+        // Auto-load on page load
+        setTimeout(() => {
+            loadBtn.click();
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+- use supabase mcp for ALL database work

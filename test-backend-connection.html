@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Backend Connection</title>
+    <script src="assets/js/backend-config.js"></script>
+</head>
+<body>
+    <h1>Backend Connection Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        async function testConnection() {
+            results.innerHTML = '<p>Testing backend connection...</p>';
+            
+            try {
+                // Test 1: Basic connectivity
+                const testResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/test`);
+                const testData = await testResponse.json();
+                results.innerHTML += `<p>✅ Basic test: ${JSON.stringify(testData)}</p>`;
+                
+                // Test 2: Check active tokens
+                const activeResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/active-tokens`);
+                const activeData = await activeResponse.json();
+                results.innerHTML += `<p>✅ Active tokens: ${activeData.count} tokens registered</p>`;
+                
+                // Test 3: Register test tokens
+                const registerResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/register-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        walletAddress: 'test-wallet',
+                        tokenMints: [
+                            'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+                            'KmiSiaF8nAe5N5pCCdvNHa9Sj8uCNujsnvUpgcag99W'
+                        ]
+                    })
+                });
+                const registerData = await registerResponse.json();
+                results.innerHTML += `<p>✅ Registration test: ${JSON.stringify(registerData)}</p>`;
+                
+                // Test 4: Check prices
+                const pricesResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/check-prices`);
+                const pricesData = await pricesResponse.json();
+                results.innerHTML += `<p>✅ Price check: ${pricesData.count} prices in database</p>`;
+                if (pricesData.prices && pricesData.prices.length > 0) {
+                    results.innerHTML += '<ul>';
+                    pricesData.prices.forEach(p => {
+                        results.innerHTML += `<li>${p.symbol}: $${p.price}</li>`;
+                    });
+                    results.innerHTML += '</ul>';
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+                console.error('Connection test error:', error);
+            }
+        }
+        
+        // Run test immediately
+        testConnection();
+    </script>
+</body>
+</html>

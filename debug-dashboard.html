@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Dashboard</title>
+    <script src="assets/js/backend-config.js"></script>
+</head>
+<body>
+    <h1>Dashboard Debug</h1>
+    <div id="debug"></div>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        
+        // Check backend config
+        debug.innerHTML += `<p>Backend URL: ${window.BACKEND_URL}</p>`;
+        
+        // Test token registration
+        async function testTokenRegistration() {
+            const testTokens = [
+                { token_mint: '3ckPwKXo8gtWCWpskGmCCowU1uoZC3PjQ2yjce5Apump' },
+                { token_mint: '8NM7yd2EWtGHBYmusCdqQ2h9K333gZ3f8RPEg7G5moon' },
+                { token_mint: '2zX6s3xyhGH5kizTMTNW8bhwc1UQU3EMiKBQv8Qzpump' }
+            ];
+            
+            try {
+                const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+                const response = await fetch(`${backendUrl}/api/dashboard/register-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        walletAddress: 'debug-wallet',
+                        tokenMints: testTokens.map(t => t.token_mint)
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                debug.innerHTML += `<p>✅ Registration successful: ${JSON.stringify(data)}</p>`;
+                
+                // Wait a bit then check if polling is happening
+                setTimeout(checkPolling, 3000);
+                
+            } catch (error) {
+                debug.innerHTML += `<p>❌ Registration error: ${error.message}</p>`;
+                console.error('Registration error:', error);
+            }
+        }
+        
+        async function checkPolling() {
+            try {
+                const response = await fetch(`${window.BACKEND_URL}/api/dashboard/active-tokens`);
+                const data = await response.json();
+                debug.innerHTML += `<p>Active tokens being polled: ${data.count}</p>`;
+                
+                // Check prices
+                const pricesResponse = await fetch(`${window.BACKEND_URL}/api/dashboard/check-prices`);
+                const pricesData = await pricesResponse.json();
+                debug.innerHTML += `<p>Prices in database: ${pricesData.count}</p>`;
+                if (pricesData.prices) {
+                    pricesData.prices.forEach(p => {
+                        if (p.symbol) {
+                            debug.innerHTML += `<p>${p.symbol}: $${p.price}</p>`;
+                        }
+                    });
+                }
+            } catch (error) {
+                debug.innerHTML += `<p>❌ Error checking polling: ${error.message}</p>`;
+            }
+        }
+        
+        // Run test
+        testTokenRegistration();
+    </script>
+</body>
+</html>

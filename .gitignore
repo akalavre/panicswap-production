@@ -1,0 +1,56 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Config files with sensitive data
+config.php
+
+# Vendor directory
+/vendor/
+
+# Composer
+composer.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+error_log
+/logs/
+
+# Cache
+/cache/
+/tmp/
+
+# Build files
+/dist/
+/build/
+node_modules/
+assets/css/tailwind.css
+
+# Stripe CLI
+.stripe/
+
+# Test coverage
+/coverage/
+.phpunit.result.cache
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# SSL certificates
+*.pem
+*.key
+*.crt

@@ -1,0 +1,47 @@
+import 'dotenv/config';
+import fetch from 'node-fetch';
+
+async function testApiLiquidityChanges() {
+  const walletAddress = 'B63rTBZeCp8vYvgM5Zu53VtXJNS1k1jjsaxHnJcz8xKm'; // Test wallet
+  const apiUrl = `http://localhost:3001/api/wallet/tokens/${walletAddress}`;
+  
+  console.log('Testing API liquidity changes...\n');
+  
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Error response:', data);
+      return;
+    }
+    
+    console.log(`Found ${data.tokens?.length || 0} tokens\n`);
+    
+    // Check tokens with price data
+    const tokensWithPrices = data.tokens?.filter((token: any) => token.token_prices) || [];
+    
+    tokensWithPrices.slice(0, 5).forEach((token: any) => {
+      console.log(`Token: ${token.symbol} (${token.name})`);
+      console.log(`  Current Price: $${token.token_prices.price || 0}`);
+      console.log(`  Current Liquidity: $${token.token_prices.liquidity || 0}`);
+      console.log(`  24h Price Change: ${token.token_prices.price_change_24h || 0}%`);
+      console.log(`  1h Liquidity Change: ${token.token_prices.liquidity_change_1h || 0}%`);
+      console.log(`  24h Liquidity Change: ${token.token_prices.liquidity_change_24h || 0}%`);
+      console.log('');
+    });
+    
+    // Check if any tokens have liquidity changes
+    const tokensWithLiqChange = tokensWithPrices.filter((token: any) => 
+      token.token_prices.liquidity_change_1h !== 0 || 
+      token.token_prices.liquidity_change_24h !== 0
+    );
+    
+    console.log(`\nTokens with liquidity changes: ${tokensWithLiqChange.length}`);
+    
+  } catch (error) {
+    console.error('Test failed:', error);
+  }
+}
+
+testApiLiquidityChanges();

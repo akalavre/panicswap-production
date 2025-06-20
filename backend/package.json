@@ -1,0 +1,53 @@
+{
+  "name": "panicswap-backend",
+  "version": "1.0.0",
+  "description": "Backend services for PanicSwap Dashboard",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --debug --log-error --respawn --transpile-only src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "echo 'Backend dependencies installed successfully'",
+    "register-token-webhooks": "ts-node register-token-webhooks.ts",
+    "register-webhooks": "ts-node register-webhooks.ts",
+    "rugcheck": "ts-node src/cli/rugcheck-polling.ts",
+    "backend:rugcheck": "ts-node src/cli/rugcheck-polling.ts"
+  },
+  "keywords": [
+    "solana",
+    "panicswap",
+    "crypto",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@jup-ag/api": "^6.0.42",
+    "@raydium-io/raydium-sdk-v2": "^0.1.139-alpha",
+    "@solana/web3.js": "^1.91.8",
+    "@supabase/supabase-js": "^2.43.4",
+    "@types/bn.js": "^5.2.0",
+    "@types/bs58": "^4.0.4",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
+    "axios": "^1.7.2",
+    "bottleneck": "^2.19.5",
+    "bs58": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "helius-sdk": "^1.2.1",
+    "inversify": "^7.5.2",
+    "node-fetch": "^2.7.0",
+    "p-retry": "^4.6.2",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  }
+}

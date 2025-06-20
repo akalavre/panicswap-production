@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Token Registration</title>
+    <script src="assets/js/backend-config.js"></script>
+</head>
+<body>
+    <h1>Token Registration Test</h1>
+    <div id="status"></div>
+    <button id="test-btn">Test Registration</button>
+    
+    <script>
+        const status = document.getElementById('status');
+        const testBtn = document.getElementById('test-btn');
+        
+        // Log backend URL
+        status.innerHTML = '<p>Backend URL: ' + (window.BACKEND_URL || 'NOT SET') + '</p>';
+        
+        // Test registration function
+        async function testRegistration() {
+            status.innerHTML += '<p>Testing registration...</p>';
+            
+            const testTokens = [
+                '3ckPwKXo8gtWCWpskGmCCowU1uoZC3PjQ2yjce5Apump',
+                '8NM7yd2EWtGHBYmusCdqQ2h9K333gZ3f8RPEg7G5moon',
+                '2zX6s3xyhGH5kizTMTNW8bhwc1UQU3EMiKBQv8Qzpump'
+            ];
+            
+            try {
+                const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+                const response = await fetch(`${backendUrl}/api/dashboard/register-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        walletAddress: 'test-wallet',
+                        tokenMints: testTokens
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                status.innerHTML += '<p style="color:green">✅ Registration successful!</p>';
+                status.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                // Check active tokens
+                setTimeout(async () => {
+                    status.innerHTML += '<p>Checking active tokens...</p>';
+                    const activeResponse = await fetch(`${backendUrl}/api/dashboard/active-tokens`);
+                    const activeData = await activeResponse.json();
+                    status.innerHTML += '<p>Active tokens: ' + activeData.count + '</p>';
+                    status.innerHTML += '<pre>' + JSON.stringify(activeData, null, 2) + '</pre>';
+                }, 2000);
+                
+            } catch (error) {
+                status.innerHTML += '<p style="color:red">❌ Error: ' + error.message + '</p>';
+                console.error('Registration error:', error);
+            }
+        }
+        
+        testBtn.addEventListener('click', testRegistration);
+    </script>
+</body>
+</html>
