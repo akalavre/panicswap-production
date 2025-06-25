@@ -1,5 +1,10 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
   <circle cx="64" cy="64" r="64" fill="#1F2937"/>
   <circle cx="64" cy="64" r="56" fill="#374151"/>
-  <text x="64" y="76" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="#9CA3AF">?</text>
+  <circle cx="64" cy="64" r="48" fill="#4B5563"/>
+  <circle cx="64" cy="64" r="40" fill="#6B7280"/>
+  <circle cx="64" cy="64" r="32" fill="#9CA3AF" opacity="0.5"/>
+  <circle cx="64" cy="64" r="24" fill="#D1D5DB" opacity="0.3"/>
+  <circle cx="64" cy="64" r="16" fill="#E5E7EB" opacity="0.2"/>
+  <circle cx="64" cy="64" r="8" fill="#F3F4F6" opacity="0.1"/>
 </svg>

@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Frontend PHP Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: panicswap-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - APP_ENV=production
+      - APP_URL=${APP_URL:-https://panicswap.com}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - HELIUS_RPC_URL=${HELIUS_RPC_URL}
+      - BACKEND_URL=${BACKEND_URL:-http://backend:3001}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - DEBUG_MODE=false
+    volumes:
+      - ./logs:/var/www/html/logs
+      - ./ssl:/etc/ssl/certs/panicswap:ro
+    depends_on:
+      - backend
+      - redis
+    restart: unless-stopped
+    networks:
+      - panicswap-network
+
+  # Backend Node.js Application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: panicswap-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HELIUS_RPC_URL=${HELIUS_RPC_URL}
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_ENABLED=true
+      - UPSTASH_REDIS_REST_URL=${UPSTASH_REDIS_REST_URL}
+      - UPSTASH_REDIS_REST_TOKEN=${UPSTASH_REDIS_REST_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - DEBUG_MODE=false
+      - TEST_MODE=false
+    volumes:
+      - ./backend/logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - panicswap-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: panicswap-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    restart: unless-stopped
+    networks:
+      - panicswap-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx Reverse Proxy (optional, for SSL termination)
+  nginx:
+    image: nginx:alpine
+    container_name: panicswap-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/ssl/certs/panicswap:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    networks:
+      - panicswap-network
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  panicswap-network:
+    driver: bridge

@@ -1,0 +1,21 @@
+IMPORTANT: Backend Restart Required!
+===================================
+
+The monitoring routes have been added to the backend code, but the backend
+needs to be restarted to load them.
+
+Steps to fix:
+1. Stop the backend (press Ctrl+C in the backend terminal)
+2. Start it again: npm run dev
+3. Run fix-monitoring.bat again
+
+OR use the automated script:
+   restart-and-fix.bat
+
+This will:
+- Guide you to restart the backend
+- Automatically run the fix
+- Set up all monitoring data
+
+The 404 error on /api/monitoring/force-update is expected until the backend
+is restarted with the new code.

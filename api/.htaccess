@@ -1,0 +1,20 @@
+# Minimal .htaccess for API directory
+RewriteEngine On
+
+# Handle preflight OPTIONS requests for CORS
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=204,L]
+
+# Ensure PHP files are processed correctly
+AddType application/x-httpd-php .php
+
+# Handle monitoring-status endpoint with path info
+RewriteRule ^monitoring-status/(.+)$ monitoring-status.php/$1 [L]
+
+# Handle protection API endpoints
+RewriteRule ^protection/protect$ protection/protect.php [L]
+RewriteRule ^protection/protect/([^/]+)/([^/]+)$ protection/protect.php?wallet=$1&mint=$2 [L]
+RewriteRule ^protection/status/([^/]+)/([^/]+)$ protection/status.php?wallet=$1&mint=$2 [L]
+
+# Handle auto-protection bulk toggle endpoint
+RewriteRule ^auto-protection/bulk-toggle/([^/]+)$ auto-protection/bulk-toggle.php?wallet=$1 [L]

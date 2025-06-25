@@ -1,6 +1,12 @@
 @echo off
-echo Starting PanicSwap Backend (Simple Mode)...
+echo Starting PanicSwap Backend (Simple Mode - No Redis)...
 echo ========================================
+echo.
+echo This will start the backend without Redis.
+echo The system will use in-memory caching.
+echo.
+echo To start with Redis, use: start-with-redis.bat
+echo.
 
 :: Try compiled version first
 if exist "dist\index.js" (

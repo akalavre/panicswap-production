@@ -39,7 +39,7 @@ These endpoints handle subscription management for PanicSwap, supporting both cr
   "success": true,
   "subscription_id": 123,
   "status": "active",
-  "expires_at": "2024-02-20T12:00:00Z",
+  "expires_at": "2025-02-20T12:00:00Z",
   "features": {
     "max_tokens": 20,
     "auto_protection": true,
@@ -117,9 +117,9 @@ These endpoints handle subscription management for PanicSwap, supporting both cr
     "advanced_analytics": true,
     "custom_alerts": true
   },
-  "expires_at": "2024-02-20T12:00:00Z",
+  "expires_at": "2025-02-20T12:00:00Z",
   "days_remaining": 25,
-  "created_at": "2024-01-20T12:00:00Z",
+  "created_at": "2025-01-20T12:00:00Z",
   "payment_method": "stripe",
   "usage": {
     "tokens_protected": 5,

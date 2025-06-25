@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-06-22T22:34:31.826Z",
+  "project_id": "cfficjjdhgqwqprfhlrj",
+  "project_name": "PanicSwap",
+  "region": "eu-west-2",
+  "tables_backed_up": 22,
+  "total_rows": 35,
+  "table_summary": [
+    {
+      "table": "users",
+      "row_count": 2
+    },
+    {
+      "table": "subscriptions",
+      "row_count": 0
+    },
+    {
+      "table": "wallet_tokens",
+      "row_count": 0
+    },
+    {
+      "table": "protected_tokens",
+      "row_count": 33
+    },
+    {
+      "table": "rugcheck_reports",
+      "row_count": 0
+    },
+    {
+      "table": "liquidity_velocity",
+      "row_count": 0
+    },
+    {
+      "table": "rug_patterns",
+      "row_count": 0
+    },
+    {
+      "table": "pattern_alerts",
+      "row_count": 0
+    },
+    {
+      "table": "ml_predictions",
+      "row_count": 0
+    },
+    {
+      "table": "ml_inference_results",
+      "row_count": 0
+    },
+    {
+      "table": "social_signals",
+      "row_count": 0
+    },
+    {
+      "table": "social_metrics",
+      "row_count": 0
+    },
+    {
+      "table": "wallet_clusters",
+      "row_count": 0
+    },
+    {
+      "table": "liquidity_snapshots",
+      "row_count": 0
+    },
+    {
+      "table": "historical_rugs",
+      "row_count": 0
+    },
+    {
+      "table": "token_prices",
+      "row_count": 0
+    },
+    {
+      "table": "pool_liquidity",
+      "row_count": 0
+    },
+    {
+      "table": "demo_protection_events",
+      "row_count": 0
+    },
+    {
+      "table": "protection_logs",
+      "row_count": 0
+    },
+    {
+      "table": "webhook_tokens",
+      "row_count": 0
+    },
+    {
+      "table": "token_socials",
+      "row_count": 0
+    },
+    {
+      "table": "community_reports",
+      "row_count": 0
+    }
+  ]
+}

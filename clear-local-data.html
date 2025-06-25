@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear PanicSwap Local Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        button {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #b91c1c;
+        }
+        .success {
+            color: #10b981;
+            margin-top: 20px;
+        }
+        .warning {
+            background: #fbbf24;
+            color: #000;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Clear PanicSwap Local Data</h1>
+    
+    <div class="warning">
+        ⚠️ Warning: This will clear all local data including wallet connection and cached tokens.
+    </div>
+    
+    <p>This page will help you clear all cached data from PanicSwap:</p>
+    <ul>
+        <li>localStorage data (wallet connection, cached tokens)</li>
+        <li>sessionStorage data</li>
+        <li>Any cached Supabase data</li>
+    </ul>
+    
+    <button onclick="clearAllData()">Clear All Local Data</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        function clearAllData() {
+            try {
+                // Clear localStorage
+                const localStorageKeys = Object.keys(localStorage);
+                localStorageKeys.forEach(key => {
+                    console.log('Removing localStorage key:', key);
+                    localStorage.removeItem(key);
+                });
+                
+                // Clear sessionStorage
+                const sessionStorageKeys = Object.keys(sessionStorage);
+                sessionStorageKeys.forEach(key => {
+                    console.log('Removing sessionStorage key:', key);
+                    sessionStorage.removeItem(key);
+                });
+                
+                // Clear any IndexedDB databases (Supabase might use this)
+                if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            console.log('Deleting IndexedDB:', db.name);
+                            indexedDB.deleteDatabase(db.name);
+                        });
+                    }).catch(err => {
+                        console.log('Could not list IndexedDB databases:', err);
+                    });
+                }
+                
+                // Show success message
+                document.getElementById('result').innerHTML = `
+                    <div class="success">
+                        ✅ All local data cleared successfully!<br><br>
+                        You can now:<br>
+                        1. Go back to <a href="/dashboard.php" style="color: #60a5fa;">Dashboard</a><br>
+                        2. Reconnect your wallet<br>
+                        3. You should see no tokens
+                    </div>
+                `;
+                
+                // Also try to clear Supabase client cache if it exists
+                if (window.supabaseClient) {
+                    console.log('Clearing Supabase client cache...');
+                    // This will force Supabase to re-authenticate
+                    window.supabaseClient.auth.signOut();
+                }
+                
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <div style="color: #ef4444;">
+                        ❌ Error clearing data: ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

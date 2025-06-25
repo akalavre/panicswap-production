@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Subscription Page</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Debug Subscription Page</h1>
+    <div id="output" style="font-family: monospace; white-space: pre-wrap; background: #f0f0f0; padding: 20px;"></div>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.innerHTML += message + '\n';
+            console.log(message);
+        }
+        
+        // Check localStorage
+        log('=== localStorage Check ===');
+        log('walletAddress: ' + localStorage.getItem('walletAddress'));
+        log('connectedWallet: ' + localStorage.getItem('connectedWallet'));
+        log('walletType: ' + localStorage.getItem('walletType'));
+        
+        // Check Supabase
+        log('\n=== Supabase Check ===');
+        const SUPABASE_URL = 'https://cfficjjdhgqwqprfhlrj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjI0OTcsImV4cCI6MjA2NDUzODQ5N30.IB-rLhiadGguYCTAZoiI60451xLLZ9M23OpfvsBt0mA';
+        
+        try {
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            log('Supabase client created successfully');
+            
+            // Test connection
+            async function testSupabase() {
+                const walletAddress = localStorage.getItem('walletAddress');
+                log('\nTesting with wallet: ' + walletAddress);
+                
+                if (walletAddress) {
+                    try {
+                        const { data, error } = await supabase
+                            .from('subscriptions')
+                            .select('*')
+                            .eq('wallet_address', walletAddress)
+                            .limit(1);
+                        
+                        if (error) {
+                            log('Supabase error: ' + JSON.stringify(error));
+                        } else {
+                            log('Supabase response: ' + JSON.stringify(data, null, 2));
+                        }
+                    } catch (e) {
+                        log('Exception: ' + e.message);
+                    }
+                }
+            }
+            
+            testSupabase();
+        } catch (e) {
+            log('Failed to create Supabase client: ' + e.message);
+        }
+        
+        // Check API endpoint
+        log('\n=== API Endpoint Check ===');
+        const walletAddress = localStorage.getItem('walletAddress');
+        if (walletAddress) {
+            fetch('/PanicSwap-php/api/get-subscription-status.php?wallet=' + walletAddress)
+                .then(response => {
+                    log('API Response status: ' + response.status);
+                    return response.text();
+                })
+                .then(text => {
+                    log('API Response: ' + text);
+                })
+                .catch(err => {
+                    log('API Error: ' + err.message);
+                });
+        } else {
+            log('No wallet address found');
+        }
+    </script>
+</body>
+</html>

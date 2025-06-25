@@ -246,7 +246,22 @@ export class LiquidityVelocityTracker extends EventEmitter {
 
       // Get historical snapshots
       const snapshots = this.snapshotCache.get(tokenMint) || [];
-      if (snapshots.length < 2) return; // Need at least 2 snapshots
+      if (snapshots.length < 2) {
+        console.log(`[LiquidityVelocityTracker] ${tokenMint}: Need at least 2 snapshots, have ${snapshots.length}`);
+        return; // Need at least 2 snapshots
+      }
+      
+      // Debug snapshot information
+      console.log(`[LiquidityVelocityTracker] ${tokenMint}: Processing ${snapshots.length} snapshots`);
+      console.log(`  Current: $${currentSnapshot.liquidityUSD} liquidity, $${currentSnapshot.price} price`);
+      console.log(`  Oldest: $${snapshots[0].liquidityUSD} liquidity at ${new Date(snapshots[0].timestamp).toISOString()}`);
+      console.log(`  Newest: $${snapshots[snapshots.length-1].liquidityUSD} liquidity at ${new Date(snapshots[snapshots.length-1].timestamp).toISOString()}`);
+      
+      // Check if we have any meaningful liquidity data across all snapshots
+      const hasAnyLiquidity = snapshots.some(s => s.liquidityUSD > 0) || currentSnapshot.liquidityUSD > 0;
+      if (!hasAnyLiquidity) {
+        console.log(`[LiquidityVelocityTracker] ${tokenMint}: No liquidity data found in any snapshot - skipping velocity calculation`);
+      }
 
       // Calculate velocities at different time windows
       const now = Date.now();
@@ -408,19 +423,59 @@ export class LiquidityVelocityTracker extends EventEmitter {
     metric: keyof LiquiditySnapshot
   ): number {
     const windowStart = current.timestamp - windowMs;
-    const startSnapshot = snapshots.find(s => s.timestamp >= windowStart) || snapshots[0];
+    const windowMinutes = windowMs / 60000;
     
-    if (!startSnapshot || startSnapshot === current) return 0;
+    // Find the best snapshot within the time window
+    const candidateSnapshots = snapshots.filter(s => s.timestamp >= windowStart && s.timestamp < current.timestamp);
+    
+    // If no snapshots in window, try to find the closest one before the window
+    let startSnapshot: LiquiditySnapshot | undefined;
+    if (candidateSnapshots.length > 0) {
+      // Use the earliest snapshot in the window for most accurate time calculation
+      startSnapshot = candidateSnapshots[0];
+    } else {
+      // Find the most recent snapshot before the window
+      const beforeWindow = snapshots.filter(s => s.timestamp < windowStart);
+      startSnapshot = beforeWindow.length > 0 ? beforeWindow[beforeWindow.length - 1] : snapshots[0];
+    }
+    
+    if (!startSnapshot || startSnapshot.timestamp >= current.timestamp) {
+      console.log(`[calculateVelocity] No valid start snapshot for ${current.tokenMint} ${metric} ${windowMinutes}m window`);
+      return 0;
+    }
     
     const startValue = startSnapshot[metric] as number;
     const currentValue = current[metric] as number;
     
-    if (startValue === 0) return 0;
+    // Handle division by zero - if start value is 0 but current isn't, that's infinite growth
+    if (startValue === 0) {
+      if (currentValue > 0) {
+        console.log(`[calculateVelocity] Start value was 0, current is ${currentValue} for ${metric} - returning high positive velocity`);
+        return 100; // Return a large positive velocity to indicate growth from zero
+      }
+      return 0; // Both are zero
+    }
     
     const percentChange = ((currentValue - startValue) / startValue) * 100;
     const timeElapsedMinutes = (current.timestamp - startSnapshot.timestamp) / 60000;
     
-    return timeElapsedMinutes > 0 ? percentChange / timeElapsedMinutes : 0;
+    if (timeElapsedMinutes <= 0) {
+      console.log(`[calculateVelocity] Invalid time elapsed: ${timeElapsedMinutes} minutes`);
+      return 0;
+    }
+    
+    const velocity = percentChange / timeElapsedMinutes;
+    
+    // Debug logging for liquidity calculations
+    if (metric === 'liquidityUSD' && Math.abs(velocity) > 0.01) {
+      console.log(`[calculateVelocity] ${current.tokenMint} ${metric} ${windowMinutes}m:`);
+      console.log(`  Start: $${startValue} at ${new Date(startSnapshot.timestamp).toISOString()}`);
+      console.log(`  Current: $${currentValue} at ${new Date(current.timestamp).toISOString()}`);
+      console.log(`  Change: ${percentChange.toFixed(2)}% over ${timeElapsedMinutes.toFixed(1)} min`);
+      console.log(`  Velocity: ${velocity.toFixed(4)}% per minute`);
+    }
+    
+    return velocity;
   }
 
   /**
@@ -552,6 +607,17 @@ export class LiquidityVelocityTracker extends EventEmitter {
     // Then check Redis cache
     const redisCached = await getCached<VelocityData>(cacheKeys.velocity(tokenMint));
     if (redisCached) {
+      // If liquidity is 0, try to get latest from DB to ensure we have fresh data
+      if (redisCached.current.liquidityUSD === 0) {
+        console.log(`[LiquidityVelocityTracker] Cached liquidity is 0 for ${tokenMint}, checking DB...`);
+        const latest = await this.getLatestVelocity(tokenMint);
+        if (latest && latest.current.liquidityUSD > 0) {
+          console.log(`[LiquidityVelocityTracker] Found fresher liquidity in DB: $${latest.current.liquidityUSD}`);
+          this.velocityCache.set(tokenMint, latest); 
+          return latest;
+        }
+      }
+
       // Update local cache with Redis data
       this.velocityCache.set(tokenMint, redisCached);
       return redisCached;
