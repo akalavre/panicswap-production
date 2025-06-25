@@ -44,6 +44,28 @@ async function testUILiquidityDisplay() {
     
     console.log(`\nTokens with non-zero liquidity changes: ${tokensWithLiqChange.length}`);
     
+    // Regression test: Check for 5-minute liquidity changes
+    const tokensWithChange5m = tokensWithPrices.filter((token: any) => {
+      const prices = token.token_prices || token.price || {};
+      return prices.liquidity_change_5m !== 0;
+    });
+    
+    console.log(`\n🧪 REGRESSION TEST: Tokens with change5m !== 0: ${tokensWithChange5m.length}`);
+    
+    if (tokensWithChange5m.length > 0) {
+      console.log('✅ PASS: Found tokens with non-zero 5-minute liquidity changes');
+      tokensWithChange5m.forEach((token: any) => {
+        const prices = token.token_prices || token.price || {};
+        console.log(`  - ${token.symbol}: change5m = ${prices.liquidity_change_5m}%`);
+      });
+    } else {
+      console.log('❌ FAIL: No tokens with non-zero 5-minute liquidity changes found');
+      console.log('This could indicate:');
+      console.log('1. The liquidity_change_5m field is not being calculated');
+      console.log('2. Insufficient historical data (need 5+ minutes of price history)');
+      console.log('3. No actual liquidity changes have occurred');
+    }
+    
     if (tokensWithLiqChange.length === 0) {
       console.log('\nNo tokens have liquidity changes yet.');
       console.log('This is expected if:');
