@@ -1,3 +1,7 @@
+<?php
+// Load main configuration (includes env-config and Sentry)
+require_once 'config.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,6 +31,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="assets/css/custom-styles.css">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -94,9 +104,7 @@
         
         <!-- Animated Orbs -->
         <div class="orb orb-primary w-96 h-96 top-10 -left-48"></div>
-        <div class="orb orb-secondary w-80 h-80 bottom-20 -right-40" style="animation-delay: 10s;"></div>
         <div class="orb orb-accent w-64 h-64 top-1/2 -left-32" style="animation-delay: 5s;"></div>
-        <div class="orb orb-primary w-72 h-72 bottom-10 left-1/3" style="animation-delay: 15s;"></div>
         <div class="orb orb-secondary w-56 h-56 top-20 right-1/4" style="animation-delay: 7s;"></div>
         <?php include 'components/network-status.php'; ?>
         <?php include 'components/header.php'; ?>
@@ -106,11 +114,8 @@
             <?php include 'components/tech-stack.php'; ?>
             <?php include 'components/video-trailer.php'; ?>
             <?php include 'components/features.php'; ?>
-            <?php include 'components/trust-indicators.php'; ?>
             <?php include 'components/pricing.php'; ?>
-            <?php include 'components/feature-comparison.php'; ?>
             <?php include 'components/how-it-works.php'; ?>
-            <?php include 'components/testimonials.php'; ?>
             <?php include 'components/cta-section.php'; ?>
         </main>
         
@@ -120,10 +125,29 @@
     <!-- Payment Modal -->
     <?php include 'components/payment-modal.php'; ?>
     
+    <!-- Wallet Settings Modal -->
+    <?php include 'components/wallet-settings-modal.php'; ?>
+    
+    <!-- Wallet Connect Modal -->
+    <?php include 'components/wallet-connect-modal.php'; ?>
+    
+    <!-- Solana Web3.js -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    
+    <!-- BS58 for base58 encoding/decoding -->
+    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/dist/bs58.min.js"></script>
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <!-- JavaScript -->
-    <script src="assets/js/main.js"></script>
+    <script src="assets/js/supabase-config.js"></script>
     <script src="assets/js/wallet-adapter.js"></script>
+    <script src="assets/js/protection-events.js"></script>
+    <script src="assets/js/auto-sell.js"></script>
+    <script src="assets/js/payment-config.js"></script>
     <script src="assets/js/payment.js"></script>
+    <script src="assets/js/main.js"></script>
     
     <!-- Initialize Lucide Icons -->
     <script>

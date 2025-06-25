@@ -19,8 +19,8 @@ class SubscriptionManager {
     }
     
     async getConnectedWallet() {
-        // Check localStorage for saved wallet
-        const savedWallet = localStorage.getItem('connectedWallet');
+        // Check localStorage for saved wallet - use consistent key
+        const savedWallet = localStorage.getItem('walletAddress');
         if (savedWallet) return savedWallet;
         
         // Check if Phantom is connected
@@ -28,7 +28,7 @@ class SubscriptionManager {
             try {
                 const resp = await window.solana.connect({ onlyIfTrusted: true });
                 const wallet = resp.publicKey.toString();
-                localStorage.setItem('connectedWallet', wallet);
+                localStorage.setItem('walletAddress', wallet);
                 return wallet;
             } catch (err) {
                 console.log('No trusted wallet connection');
@@ -42,16 +42,48 @@ class SubscriptionManager {
         if (!this.walletAddress) return;
         
         try {
-            const response = await fetch(`/api/get-subscription-status.php?wallet=${this.walletAddress}`);
+            // Use relative path to work regardless of deployment location
+            const response = await fetch(`api/get-subscription-status.php?wallet=${this.walletAddress}`);
+            
+            // Check if response is ok
+            if (!response.ok) {
+                console.error('Subscription API returned error:', response.status);
+                this.currentSubscription = null;
+                return;
+            }
+            
             const data = await response.json();
             
-            if (data.success) {
-                this.currentSubscription = data.subscription;
+            // Handle the response data
+            if (data.wallet) {
+                this.currentSubscription = data.subscription || {
+                    status: 'active',
+                    plan: 'free',
+                    features: {
+                        maxTokens: 5,
+                        maxProtections: 3,
+                        realtimeAlerts: true,
+                        autoProtection: false,
+                        priorityExecution: false
+                    }
+                };
             } else {
                 this.currentSubscription = null;
             }
         } catch (err) {
             console.error('Failed to check subscription:', err);
+            // Set default free subscription on error
+            this.currentSubscription = {
+                status: 'active',
+                plan: 'free',
+                features: {
+                    maxTokens: 5,
+                    maxProtections: 3,
+                    realtimeAlerts: true,
+                    autoProtection: false,
+                    priorityExecution: false
+                }
+            };
         }
     }
     
@@ -63,7 +95,17 @@ class SubscriptionManager {
             responseTime: document.querySelector('[data-response-time]'),
             dexCoverage: document.querySelector('[data-dex-coverage]'),
             features: document.querySelector('[data-subscription-features]'),
-            upgradeBtn: document.querySelector('[data-upgrade-btn]')
+            upgradeBtn: document.querySelector('[data-upgrade-btn]'),
+            // New elements for subscription management
+            subscriptionStatus: document.getElementById('subscription-status'),
+            memberSince: document.getElementById('member-since'),
+            paymentMethod: document.getElementById('payment-method'),
+            paymentWallet: document.getElementById('payment-wallet'),
+            nextPaymentDate: document.getElementById('next-payment-date'),
+            nextPaymentAmount: document.getElementById('next-payment-amount'),
+            autoRenewalSettings: document.getElementById('auto-renewal-settings'),
+            autoRenewToggle: document.getElementById('auto-renew-toggle'),
+            cancelBtn: document.getElementById('cancel-subscription-btn')
         };
         
         if (!this.currentSubscription || this.currentSubscription.plan === 'Basic') {
@@ -106,6 +148,9 @@ class SubscriptionManager {
             if (this.currentSubscription.expires_at) {
                 this.showExpirationInfo();
             }
+            
+            // Update subscription management UI
+            this.updateSubscriptionManagement(elements);
         }
     }
     
@@ -208,6 +253,94 @@ class SubscriptionManager {
             'Enterprise': 486.12
         };
         return prices[plan] || 161.04;
+    }
+    
+    updateSubscriptionManagement(elements) {
+        if (!this.currentSubscription) return;
+        
+        const sub = this.currentSubscription;
+        
+        // Update status
+        if (elements.subscriptionStatus) {
+            elements.subscriptionStatus.textContent = sub.status || 'Active';
+            elements.subscriptionStatus.className = `text-xs px-2 py-1 rounded-full ${
+                sub.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                sub.status === 'cancelled' ? 'bg-red-500/20 text-red-400' :
+                'bg-yellow-500/20 text-yellow-400'
+            }`;
+        }
+        
+        // Update member since
+        if (elements.memberSince && sub.created_at) {
+            const date = new Date(sub.created_at);
+            elements.memberSince.textContent = date.toLocaleDateString();
+        }
+        
+        // Update payment method
+        if (elements.paymentMethod) {
+            elements.paymentMethod.textContent = sub.payment_method === 'stripe' ? 'Credit Card' : 'Solana';
+            
+            // Update icon
+            const icon = document.getElementById('payment-method-icon');
+            if (icon) {
+                if (sub.payment_method === 'stripe') {
+                    icon.innerHTML = '<i class="fas fa-credit-card text-blue-400"></i>';
+                    icon.className = 'w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center';
+                } else {
+                    icon.innerHTML = '<span class="text-purple-400 text-lg">◎</span>';
+                    icon.className = 'w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center';
+                }
+            }
+        }
+        
+        // Update payment wallet
+        if (elements.paymentWallet && sub.payment_wallet) {
+            const wallet = sub.payment_wallet;
+            elements.paymentWallet.textContent = wallet.slice(0, 4) + '...' + wallet.slice(-4);
+        }
+        
+        // Update next payment
+        if (elements.nextPaymentDate) {
+            if (sub.next_payment_date) {
+                const date = new Date(sub.next_payment_date);
+                elements.nextPaymentDate.textContent = date.toLocaleDateString();
+                
+                // Calculate days until next payment
+                const now = new Date();
+                const daysUntil = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
+                
+                if (daysUntil <= 1) {
+                    elements.nextPaymentDate.innerHTML += ' <span class="text-xs text-yellow-400">(Tomorrow)</span>';
+                } else if (daysUntil <= 7) {
+                    elements.nextPaymentDate.innerHTML += ` <span class="text-xs text-gray-400">(in ${daysUntil} days)</span>`;
+                }
+            } else {
+                elements.nextPaymentDate.textContent = 'N/A';
+            }
+        }
+        
+        // Update next payment amount
+        if (elements.nextPaymentAmount) {
+            if (sub.payment_method === 'sol' && sub.amount_sol) {
+                elements.nextPaymentAmount.textContent = `${sub.amount_sol} SOL`;
+            } else if (sub.amount) {
+                elements.nextPaymentAmount.textContent = `$${sub.amount}`;
+            }
+        }
+        
+        // Show/hide auto-renewal settings for hot wallet users
+        if (elements.autoRenewalSettings && sub.is_hot_wallet && sub.payment_method === 'sol') {
+            elements.autoRenewalSettings.classList.remove('hidden');
+            
+            if (elements.autoRenewToggle) {
+                elements.autoRenewToggle.checked = sub.auto_renew !== false;
+            }
+        }
+        
+        // Show/hide cancel button for active subscriptions
+        if (elements.cancelBtn && sub.plan !== 'free' && sub.status === 'active') {
+            elements.cancelBtn.classList.remove('hidden');
+        }
     }
 }
 

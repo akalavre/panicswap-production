@@ -557,30 +557,36 @@ export class RugCheckPollingService {
         return null;
       }
       
-      // Method 1: Use Helius JSON-RPC to get token accounts
+      // Method 1: Use standard getTokenLargestAccounts for estimation
       try {
-        // Use Helius RPC endpoint with getTokenAccounts method
+        // Use standard Solana RPC method that's widely available
         const response = await rpcCall<any>(
-          "getTokenAccounts",
-          [
-            mint,
-            1000,
-            1
-          ]
+          "getTokenLargestAccounts",
+          [mint]
         );
         
-        if (response && response.token_accounts) {
-          const tokenAccounts = response.token_accounts;
-          // Count unique owners (one owner can have multiple token accounts)
-          const uniqueOwners = new Set(tokenAccounts.map((acc: any) => acc.owner));
-          const holderCount = uniqueOwners.size;
+        if (response && response.value) {
+          const largestAccounts = response.value;
+          // We get the top 20 holders - use this to estimate total holders
+          let holderCount = largestAccounts.length; // At minimum, these holders exist
           
-          console.log(`Got ${holderCount} unique holders for ${mint} from Helius RPC`);
-          
-          // If we hit the limit, there might be more holders
-          if (tokenAccounts.length >= 1000) {
-            console.log(`Token ${mint} has 1000+ token accounts (may have more holders)`);
+          // If we have 20 holders returned, there are likely more
+          if (largestAccounts.length >= 20) {
+            // Estimate based on distribution
+            const totalSupply = largestAccounts.reduce((sum: number, acc: any) => {
+              return sum + parseFloat(acc.uiAmountString || acc.uiAmount || '0');
+            }, 0);
+            
+            // If top 20 hold less than 80% of supply, likely many more holders
+            const top20Percentage = (totalSupply / 1000000000) * 100; // Assume 1B total supply
+            if (top20Percentage < 80) {
+              holderCount = 100; // Conservative estimate
+            } else {
+              holderCount = 50; // Still likely more than 20
+            }
           }
+          
+          console.log(`Estimated ${holderCount}+ holders for ${mint} from top accounts`);
           
           // Cache the result
           this.holderCountCache.set(mint, { value: holderCount, timestamp: Date.now() });

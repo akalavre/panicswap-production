@@ -1,5 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { PumpFunBondingCurve } from './PumpFunBondingCurveDecoder';
+import { GoPlusSecurityService, GoPlusRiskAssessment } from './GoPlusSecurityService';
 
 interface PriceHistory {
   timestamp: number;
@@ -28,8 +29,13 @@ export class SmartRugDetector {
   private priceHistory: Map<string, PriceHistory[]> = new Map();
   private readonly HISTORY_WINDOW = 300; // 5 minutes of history
   private readonly MIN_HISTORY_POINTS = 10; // Need at least 10 data points
+  private goPlusService: GoPlusSecurityService;
+  private goPlusCache: Map<string, { data: GoPlusRiskAssessment; timestamp: number }> = new Map();
+  private readonly GOPLUS_CACHE_TTL = 300000; // 5 minutes
   
-  constructor(private connection: Connection) {}
+  constructor(private connection: Connection) {
+    this.goPlusService = new GoPlusSecurityService();
+  }
 
   /**
    * Smart analysis that avoids false positives
@@ -67,10 +73,41 @@ export class SmartRugDetector {
       falsePositiveChecks.push('Increasing volume indicates healthy trading');
     }
     
+    // Get GoPlus security data
+    const goPlusData = await this.getGoPlusSecurityData(tokenMint);
+    
     // Now check for rug indicators
     const rugReasons: string[] = [];
     let rugConfidence = 0;
     let rugType: 'liquidity_removal' | 'dev_dump' | 'slow_rug' | 'honeypot' | undefined;
+    
+    // Add GoPlus risk assessment
+    if (goPlusData) {
+      if (goPlusData.isHoneypot) {
+        rugReasons.push('GoPlus: Honeypot detected - transfers blocked');
+        rugConfidence = 100;
+        rugType = 'honeypot';
+      }
+      
+      if (goPlusData.riskLevel === 'CRITICAL') {
+        rugConfidence += 40;
+        rugReasons.push(`GoPlus: Critical risk - ${goPlusData.risks.join(', ')}`);
+      } else if (goPlusData.riskLevel === 'HIGH') {
+        rugConfidence += 30;
+        rugReasons.push(`GoPlus: High risk - ${goPlusData.risks.slice(0, 2).join(', ')}`);
+      }
+      
+      // Use GoPlus data to enhance detection
+      if (goPlusData.isMintable && !goPlusData.isTrustedToken) {
+        rugReasons.push('Token supply can be increased by owner');
+        rugConfidence += 20;
+      }
+      
+      if (goPlusData.topHolderConcentration > 60) {
+        rugReasons.push(`Top holders control ${goPlusData.topHolderConcentration.toFixed(1)}% of supply`);
+        rugConfidence += 15;
+      }
+    }
     
     // 1. Liquidity removal detection
     const liqDrop = this.calculateLiquidityDrop(tokenMint);
@@ -324,15 +361,42 @@ export class SmartRugDetector {
   }
   
   /**
+   * Get GoPlus security data with caching
+   */
+  private async getGoPlusSecurityData(tokenMint: string): Promise<GoPlusRiskAssessment | null> {
+    // Check cache first
+    const cached = this.goPlusCache.get(tokenMint);
+    if (cached && Date.now() - cached.timestamp < this.GOPLUS_CACHE_TTL) {
+      return cached.data;
+    }
+    
+    try {
+      const data = await this.goPlusService.checkTokenSecurity(tokenMint);
+      if (data) {
+        this.goPlusCache.set(tokenMint, { data, timestamp: Date.now() });
+      }
+      return data;
+    } catch (error) {
+      console.error(`[SmartRugDetector] GoPlus error for ${tokenMint}:`, error);
+      return null;
+    }
+  }
+  
+  /**
    * Check if token is a honeypot
    */
   private async checkHoneypot(tokenMint: string): Promise<boolean> {
-    // In production, this would:
+    // First check GoPlus data
+    const goPlusData = await this.getGoPlusSecurityData(tokenMint);
+    if (goPlusData?.isHoneypot) {
+      return true;
+    }
+    
+    // Additional honeypot checks could go here
     // 1. Check if sells are blocked in smart contract
     // 2. Analyze successful sell transactions
     // 3. Check for extremely high sell tax
     
-    // For now, return false (not a honeypot)
     return false;
   }
   

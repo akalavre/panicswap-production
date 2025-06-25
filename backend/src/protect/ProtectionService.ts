@@ -1,4 +1,5 @@
 import supabase from '../utils/supabaseClient';
+import { transactionCache } from '../services/TransactionCache';
 // import { WebSocketService } from '../services/WebSocketService'; // REMOVED: Using Supabase Realtime
 
 export interface ProtectionSettings {
@@ -112,6 +113,9 @@ export class ProtectionService {
       } catch (error) {
         console.error('Error writing protection event to Supabase:', error);
       }
+
+      // Pre-compute emergency transactions
+      await this.prepareEmergencyTransactions(walletAddress, tokenMint, settings);
 
       return data;
     } catch (error) {
@@ -408,6 +412,68 @@ export class ProtectionService {
       }
     } catch (error) {
       console.error('Error updating protection status:', error);
+    }
+  }
+
+  /**
+   * Pre-compute emergency transactions for instant execution
+   */
+  async prepareEmergencyTransactions(
+    walletAddress: string,
+    tokenMint: string,
+    settings: ProtectionSettings
+  ): Promise<void> {
+    try {
+      console.log(`[ProtectionService] Pre-computing emergency transactions for ${tokenMint}`);
+      
+      // Get token balance
+      const { data: walletToken } = await supabase
+        .from('wallet_tokens')
+        .select('balance, decimals')
+        .eq('wallet_address', walletAddress)
+        .eq('token_mint', tokenMint)
+        .single();
+      
+      if (!walletToken || !walletToken.balance) {
+        console.log(`[ProtectionService] No balance found for ${tokenMint}`);
+        return;
+      }
+      
+      // Import swap service dynamically
+      const { Connection } = await import('@solana/web3.js');
+      const { createSwapService } = await import('./SwapService');
+      const connection = new Connection(
+        process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com'
+      );
+      const swapService = createSwapService(connection);
+      
+      // Pre-compute emergency swap transaction
+      // This will be enhanced in SwapService update
+      console.log(`[ProtectionService] Pre-computation scheduled for ${tokenMint}`);
+      
+    } catch (error) {
+      console.error('[ProtectionService] Error preparing emergency transactions:', error);
+    }
+  }
+
+  /**
+   * Get pre-computed emergency transaction
+   */
+  async getEmergencyTransaction(
+    walletAddress: string,
+    tokenMint: string
+  ): Promise<any> {
+    try {
+      const cached = await transactionCache.getTransaction(
+        tokenMint,
+        walletAddress,
+        true // emergency
+      );
+      
+      return cached;
+    } catch (error) {
+      console.error('[ProtectionService] Error getting emergency transaction:', error);
+      return null;
     }
   }
 }

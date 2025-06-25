@@ -1,11 +1,14 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { Helius } from 'helius-sdk';
+import { safeParsePubkey, validatePublicKey } from '../utils/publicKeyUtils';
 import supabase from '../utils/supabaseClient';
 import config from '../config';
 import { RaydiumPoolDiscoveryService } from './RaydiumPoolDiscoveryService';
 import { PumpFunPoolDiscoveryService } from './PumpFunPoolDiscoveryService';
 import { poolMonitoringService } from './PoolMonitoringService';
 import { broadcastService } from './SupabaseBroadcastService';
+import { liquidityVelocityTracker } from './LiquidityVelocityTracker';
+import { EventEmitter } from 'events';
 
 interface TokenBalance {
   mint: string;
@@ -40,8 +43,10 @@ export class WalletTokenService {
   private connection: Connection;
   private raydiumService: RaydiumPoolDiscoveryService;
   private pumpFunService: PumpFunPoolDiscoveryService;
+  private eventBus: EventEmitter | null = null;
 
-  constructor() {
+  constructor(eventBus?: EventEmitter) {
+    this.eventBus = eventBus || null;
     if (!config.heliusRpcUrl || !config.heliusApiKey) {
       throw new Error('Helius RPC URL and API key are required');
     }
@@ -93,8 +98,9 @@ export class WalletTokenService {
       const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
       
       try {
+        const walletPubkey = validatePublicKey(walletAddress, 'wallet address');
         const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
-          new PublicKey(walletAddress),
+          walletPubkey,
           { programId: TOKEN_PROGRAM_ID }
         );
         
@@ -144,7 +150,11 @@ export class WalletTokenService {
       }
 
       // Always include SOL
-      const solBalance = await this.connection.getBalance(new PublicKey(walletAddress));
+      const walletPubkeyForSol = safeParsePubkey(walletAddress);
+      if (!walletPubkeyForSol) {
+        throw new Error('Invalid wallet address');
+      }
+      const solBalance = await this.connection.getBalance(walletPubkeyForSol);
       if (solBalance > 0) {
         tokens.push({
           mint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
@@ -318,14 +328,14 @@ export class WalletTokenService {
           }, { onConflict: 'mint' })
       );
 
-      // Save wallet tokens
+      // Save wallet tokens - only use columns that exist in the table
       const walletTokensData = tokens.map(token => ({
         wallet_address: walletAddress,
         token_mint: token.mint,
         balance: token.balance.toString(),
-        ui_balance: token.uiBalance,
-        value_usd: token.value,
-        last_synced_at: new Date().toISOString()
+        decimals: token.decimals,
+        is_test_token: false,
+        last_seen_at: new Date().toISOString()
       }));
 
       const walletTokensPromise = supabase
@@ -360,9 +370,57 @@ export class WalletTokenService {
       ]);
 
       console.log(`[WalletTokenService] Saved ${tokens.length} tokens to database`);
+      
+      // Check for tokens that need ML analysis
+      await this.triggerMLAnalysisForNewTokens(tokens);
     } catch (error) {
       console.error('[WalletTokenService] Error saving tokens:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Trigger ML analysis for tokens that don't have it yet
+   */
+  private async triggerMLAnalysisForNewTokens(tokens: EnrichedToken[]) {
+    try {
+      // Get token mints
+      const tokenMints = tokens.map(t => t.mint);
+      
+      // Check which tokens already have ML analysis
+      const { data: existingML } = await supabase
+        .from('ml_risk_analysis')
+        .select('token_mint')
+        .in('token_mint', tokenMints);
+      
+      const existingMints = new Set(existingML?.map(m => m.token_mint) || []);
+      const newTokenMints = tokenMints.filter(mint => !existingMints.has(mint));
+      
+      if (newTokenMints.length > 0) {
+        console.log(`[WalletTokenService] Found ${newTokenMints.length} tokens without ML analysis`);
+        
+        // Emit event for ML generation if eventBus is available
+        if (this.eventBus) {
+          this.eventBus.emit('new-tokens-discovered', {
+            tokenMints: newTokenMints,
+            source: 'wallet_sync'
+          });
+        }
+        
+        // Also insert placeholder entries to ensure they get picked up
+        const placeholderData = newTokenMints.map(mint => ({
+          token_mint: mint,
+          needs_ml_generation: true,
+          created_at: new Date().toISOString()
+        }));
+        
+        await supabase
+          .from('ml_generation_queue')
+          .upsert(placeholderData, { onConflict: 'token_mint' });
+      }
+    } catch (error) {
+      console.error('[WalletTokenService] Error triggering ML analysis:', error);
+      // Don't throw - this shouldn't break the sync process
     }
   }
 
@@ -390,6 +448,10 @@ export class WalletTokenService {
           walletAddress,
           token.poolAddress!
         );
+        
+        // Also start velocity tracking for enhanced detection
+        await liquidityVelocityTracker.trackToken(token.mint);
+        console.log(`[WalletTokenService] Started velocity tracking for ${token.symbol}`);
       }
     }
   }
@@ -419,7 +481,7 @@ export class WalletTokenService {
         token_metadata!inner(*)
       `)
       .eq('wallet_address', walletAddress)
-      .order('value_usd', { ascending: false });
+      .order('balance', { ascending: false });
 
     if (!walletTokens) return [];
 
@@ -427,16 +489,21 @@ export class WalletTokenService {
       mint: wt.token_mint,
       symbol: wt.token_metadata.symbol,
       name: wt.token_metadata.name,
-      decimals: wt.token_metadata.decimals,
+      decimals: wt.decimals || wt.token_metadata.decimals || 9,
       balance: parseFloat(wt.balance),
-      uiBalance: wt.ui_balance,
+      uiBalance: parseFloat(wt.balance) / Math.pow(10, wt.decimals || wt.token_metadata.decimals || 9),
       logoUri: wt.token_metadata.logo_uri,
-      price: wt.value_usd ? wt.value_usd / wt.ui_balance : undefined,
-      value: wt.value_usd,
+      price: undefined, // Price data would need to come from elsewhere
+      value: undefined, // Value would need to be calculated
       platform: wt.token_metadata.platform
     }));
   }
 }
 
-// Export singleton instance
+// Export factory function instead of singleton to allow event bus injection
+export function createWalletTokenService(eventBus?: EventEmitter) {
+  return new WalletTokenService(eventBus);
+}
+
+// Export singleton for backward compatibility
 export const walletTokenService = new WalletTokenService();

@@ -1,35 +1,31 @@
 // Payment System for PanicSwap
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
-const MERCHANT_WALLET = "5kUXfkUbawYtMxvGJtfcZXDgf5FJ7YnxDqki9QMEiMtB"; // PanicSwap merchant wallet
-const SOL_PRICE = 147.70; // Current SOL price in USD
-
-// Initialize wallet adapter
-const walletAdapter = new WalletAdapter();
-
-// Pricing configuration
-const PLANS = {
+// Get configuration from global scope to avoid temporal dead zone issues
+const SOLANA_RPC = window.PaymentConfig?.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+const MERCHANT_WALLET = window.PaymentConfig?.MERCHANT_WALLET || "5kUXfkUbawYtMxvGJtfcZXDgf5FJ7YnxDqki9QMEiMtB";
+const SOL_PRICE = window.PaymentConfig?.SOL_PRICE || 140;
+const PLANS = window.PaymentConfig?.PLANS || {
     pro: {
         name: 'Pro',
-        solPrice: 0.99,
-        usdPrice: 161.04,
-        weeklySOL: 0.248,
-        weeklyUSD: 40.26,
+        solPrice: 0.56,
+        usdPrice: 79,
+        weeklySOL: 0.141,
+        weeklyUSD: 19.75,
         features: 'Up to 50 tokens, < 2s response'
     },
     degen: {
         name: 'Degen Mode',
-        solPrice: 1.99,
-        usdPrice: 323.63,
-        weeklySOL: 0.498,
-        weeklyUSD: 80.91,
+        solPrice: 1.06,
+        usdPrice: 149,
+        weeklySOL: 0.266,
+        weeklyUSD: 37.25,
         features: 'Up to 100 tokens, < 1s response, Pump.fun'
     },
     enterprise: {
         name: 'Enterprise',
-        solPrice: 2.99,
-        usdPrice: 486.12,
-        weeklySOL: 0.748,
-        weeklyUSD: 121.53,
+        solPrice: 2.85,
+        usdPrice: 399,
+        weeklySOL: 0.713,
+        weeklyUSD: 99.75,
         features: 'Unlimited tokens, all DEXs, dedicated support'
     }
 };
@@ -38,6 +34,11 @@ let selectedPlan = null;
 let selectedPaymentMethod = 'sol';
 let provider = null;
 let publicKey = null;
+
+// Check if wallet adapter is available
+function checkWalletAdapter() {
+    return typeof window.walletAdapter !== 'undefined' && window.walletAdapter;
+}
 
 // Initialize payment modal
 function initializePaymentModal() {
@@ -88,21 +89,44 @@ function initializePaymentModal() {
 
 // Open payment modal with selected plan
 function openPaymentModal(planId, solPrice, usdPrice) {
+    // Ensure PLANS is defined
+    if (typeof PLANS === 'undefined' || !PLANS[planId]) {
+        console.error('Payment plans not loaded yet or invalid plan ID:', planId);
+        return;
+    }
+    
     selectedPlan = PLANS[planId];
     
+    // Check if modal elements exist
+    const planNameEl = document.getElementById('selected-plan-name');
+    const planFeaturesEl = document.getElementById('selected-plan-features');
+    
+    if (!planNameEl || !planFeaturesEl) {
+        console.error('Payment modal elements not found');
+        return;
+    }
+    
     // Update modal content
-    document.getElementById('selected-plan-name').textContent = selectedPlan.name;
-    document.getElementById('selected-plan-features').textContent = selectedPlan.features;
+    planNameEl.textContent = selectedPlan.name;
+    planFeaturesEl.textContent = selectedPlan.features;
     
     // Update SOL prices
-    document.getElementById('sol-price-weekly').textContent = selectedPlan.weeklySOL.toFixed(3);
-    document.getElementById('sol-price-monthly').textContent = selectedPlan.solPrice;
-    document.getElementById('sol-payment-amount').textContent = selectedPlan.solPrice;
+    const solWeeklyEl = document.getElementById('sol-price-weekly');
+    const solMonthlyEl = document.getElementById('sol-price-monthly');
+    const solAmountEl = document.getElementById('sol-payment-amount');
+    
+    if (solWeeklyEl) solWeeklyEl.textContent = selectedPlan.weeklySOL.toFixed(3);
+    if (solMonthlyEl) solMonthlyEl.textContent = selectedPlan.solPrice;
+    if (solAmountEl) solAmountEl.textContent = selectedPlan.solPrice;
     
     // Update USD prices
-    document.getElementById('usd-price-weekly').textContent = selectedPlan.weeklyUSD.toFixed(2);
-    document.getElementById('usd-price-monthly').textContent = selectedPlan.usdPrice.toFixed(2);
-    document.getElementById('usd-payment-amount').textContent = selectedPlan.usdPrice.toFixed(2);
+    const usdWeeklyEl = document.getElementById('usd-price-weekly');
+    const usdMonthlyEl = document.getElementById('usd-price-monthly');
+    const usdAmountEl = document.getElementById('usd-payment-amount');
+    
+    if (usdWeeklyEl) usdWeeklyEl.textContent = selectedPlan.weeklyUSD.toFixed(2);
+    if (usdMonthlyEl) usdMonthlyEl.textContent = selectedPlan.usdPrice.toFixed(2);
+    if (usdAmountEl) usdAmountEl.textContent = selectedPlan.usdPrice.toFixed(2);
     
     showPaymentModal();
 }
@@ -112,6 +136,39 @@ function showPaymentModal() {
     const modal = document.getElementById('payment-modal');
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+    
+    // Check if wallet is already connected
+    const walletAddress = localStorage.getItem('walletAddress') || publicKey || window.walletAdapter?.publicKey;
+    const walletType = localStorage.getItem('walletType');
+    
+    if (walletAddress) {
+        // Wallet is connected, update the UI
+        document.getElementById('wallet-not-connected').classList.add('hidden');
+        document.getElementById('wallet-connected').classList.remove('hidden');
+        document.getElementById('connected-wallet-address').textContent = 
+            walletAddress.slice(0, 4) + '...' + walletAddress.slice(-4);
+        
+        // Update publicKey if not set
+        if (!publicKey) {
+            publicKey = walletAddress;
+        }
+        
+        // Update wallet balance display for hot wallets
+        if (walletType === 'hot') {
+            const balanceEl = document.getElementById('wallet-balance');
+            if (balanceEl) {
+                balanceEl.textContent = 'Hot wallet connected';
+            }
+        } else {
+            // Check balance for browser wallets
+            checkWalletBalance();
+        }
+    } else {
+        // Wallet not connected
+        document.getElementById('wallet-not-connected').classList.remove('hidden');
+        document.getElementById('wallet-connected').classList.add('hidden');
+    }
+    
     updatePaymentSection();
 }
 
@@ -125,10 +182,25 @@ function closePaymentModal() {
 function updatePaymentSection() {
     const solSection = document.getElementById('sol-payment-section');
     const usdSection = document.getElementById('usd-payment-section');
+    const walletType = localStorage.getItem('walletType');
     
     if (selectedPaymentMethod === 'sol') {
         solSection.classList.remove('hidden');
         usdSection.classList.add('hidden');
+        
+        // Update payment button text for hot wallets
+        if (walletType === 'hot') {
+            const payBtn = document.getElementById('pay-with-sol-btn');
+            if (payBtn && selectedPlan) {
+                payBtn.innerHTML = `Process Payment with Hot Wallet - ${selectedPlan.solPrice} SOL`;
+            }
+        } else {
+            // Reset button text for browser wallets
+            const payBtn = document.getElementById('pay-with-sol-btn');
+            if (payBtn && selectedPlan) {
+                payBtn.innerHTML = `Pay <span id="sol-payment-amount">${selectedPlan.solPrice}</span> SOL`;
+            }
+        }
     } else {
         solSection.classList.add('hidden');
         usdSection.classList.remove('hidden');
@@ -138,23 +210,45 @@ function updatePaymentSection() {
 // Wallet Connection Functions
 async function connectWallet() {
     try {
+        // Check if wallet adapter is available
+        if (!checkWalletAdapter()) {
+            showNotification('Wallet adapter not loaded yet. Please try again.', 'error');
+            return;
+        }
+        
         // Show wallet selection modal
         const walletModal = await showWalletSelectionModal();
         if (!walletModal) return;
         
         // Connect to selected wallet
-        publicKey = await walletAdapter.connect(walletModal);
-        provider = walletAdapter.provider;
+        publicKey = await window.walletAdapter.connect(walletModal);
+        provider = window.walletAdapter.provider;
         
         // Update UI
-        document.getElementById('wallet-not-connected').classList.add('hidden');
-        document.getElementById('wallet-connected').classList.remove('hidden');
-        document.getElementById('connected-wallet-address').textContent = 
-            publicKey.slice(0, 4) + '...' + publicKey.slice(-4);
+        const walletNotConnected = document.getElementById('wallet-not-connected');
+        const walletConnected = document.getElementById('wallet-connected');
+        const addressElement = document.getElementById('connected-wallet-address');
+        const autoRenewalConsent = document.getElementById('auto-renewal-consent');
+        
+        if (walletNotConnected) walletNotConnected.classList.add('hidden');
+        if (walletConnected) walletConnected.classList.remove('hidden');
+        if (addressElement) {
+            addressElement.textContent = publicKey.slice(0, 4) + '...' + publicKey.slice(-4);
+        }
+        
+        // Show auto-renewal consent for hot wallets
+        const walletType = localStorage.getItem('walletType');
+        if (autoRenewalConsent && walletType === 'hot') {
+            autoRenewalConsent.classList.remove('hidden');
+            // Default to checked for hot wallets
+            const checkbox = document.getElementById('auto-renew-checkbox');
+            if (checkbox) checkbox.checked = true;
+        }
         
         // Store wallet preference
         localStorage.setItem('preferredWallet', walletModal);
         localStorage.setItem('connectedWallet', publicKey);
+        localStorage.setItem('walletAddress', publicKey);
         
         // Check wallet balance
         await checkWalletBalance();
@@ -164,13 +258,15 @@ async function connectWallet() {
         if (err.message.includes('No Solana wallet found')) {
             showWalletInstallPrompt();
         } else {
-            alert('Failed to connect wallet: ' + err.message);
+            showNotification('Failed to connect wallet: ' + err.message, 'error');
         }
     }
 }
 
 async function disconnectWallet() {
-    await walletAdapter.disconnect();
+    if (window.walletAdapter) {
+        await window.walletAdapter.disconnect();
+    }
     
     publicKey = null;
     provider = null;
@@ -185,8 +281,47 @@ async function disconnectWallet() {
 
 async function checkWalletBalance() {
     try {
+        // Use the public key from localStorage if walletAdapter not ready
+        const walletPubkey = publicKey || localStorage.getItem('walletAddress');
+        const walletType = localStorage.getItem('walletType');
+        
+        if (!walletPubkey) {
+            console.error('No wallet address available');
+            return false;
+        }
+        
+        // For hot wallets, skip balance check (backend will handle it)
+        if (walletType === 'hot') {
+            const balanceDisplay = document.getElementById('wallet-balance');
+            if (balanceDisplay) {
+                balanceDisplay.textContent = 'Hot wallet';
+            }
+            return true; // Assume hot wallet has balance
+        }
+        
+        // Create connection without custom headers (causes CORS issues)
         const connection = new solanaWeb3.Connection(SOLANA_RPC, 'confirmed');
-        const solBalance = await walletAdapter.getBalance(connection);
+        
+        // Get balance directly if walletAdapter not ready
+        let solBalance;
+        if (window.walletAdapter && window.walletAdapter.getBalance) {
+            solBalance = await window.walletAdapter.getBalance(connection);
+        } else {
+            // Fallback: get balance directly
+            try {
+                const pubkey = new solanaWeb3.PublicKey(walletPubkey);
+                const lamports = await connection.getBalance(pubkey);
+                solBalance = lamports / solanaWeb3.LAMPORTS_PER_SOL;
+            } catch (rpcError) {
+                console.warn('RPC error getting balance:', rpcError);
+                // For hot wallets, assume they have balance
+                if (walletType === 'hot') {
+                    solBalance = 10; // Assume enough balance
+                } else {
+                    throw rpcError;
+                }
+            }
+        }
         
         // Update balance display
         const balanceDisplay = document.getElementById('wallet-balance');
@@ -212,8 +347,24 @@ async function checkWalletBalance() {
 
 // Process SOL Payment
 async function processSOLPayment() {
+    // Check for wallet connection (either browser wallet or hot wallet)
+    const walletAddress = publicKey || localStorage.getItem('walletAddress') || window.walletAdapter?.publicKey;
+    const walletType = localStorage.getItem('walletType');
+    
+    if (!walletAddress) {
+        showNotification('Please connect your wallet first', 'error');
+        return;
+    }
+    
+    // For hot wallets, we need to handle the payment differently
+    if (walletType === 'hot') {
+        await processHotWalletPayment(walletAddress);
+        return;
+    }
+    
+    // Check if browser wallet is connected
     if (!publicKey || !provider) {
-        alert('Please connect your wallet first');
+        showNotification('Please connect your browser wallet to continue', 'error');
         return;
     }
     
@@ -245,7 +396,7 @@ async function processSOLPayment() {
         transaction.feePayer = fromPubkey;
         
         // Send transaction
-        const { signature } = await walletAdapter.signAndSendTransaction(transaction);
+        const { signature } = await window.walletAdapter.signAndSendTransaction(transaction);
         
         // Wait for confirmation
         await connection.confirmTransaction(signature, 'confirmed');
@@ -298,7 +449,7 @@ async function processStripePayment() {
     
     try {
         // Create Stripe checkout session
-        const response = await fetch('/api/create-checkout-session.php', {
+        const response = await fetch('api/create-checkout-session.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -311,13 +462,22 @@ async function processStripePayment() {
         
         const data = await response.json();
         
-        if (data.success && data.url) {
-            // Save session ID for tracking
-            localStorage.setItem('stripe_session_id', data.sessionId);
-            // Redirect to Stripe checkout
-            window.location.href = data.url;
+        if (data.success) {
+            if (data.url) {
+                // Save session ID for tracking
+                localStorage.setItem('stripe_session_id', data.sessionId);
+                // Redirect to Stripe checkout
+                window.location.href = data.url;
+            }
         } else {
-            throw new Error(data.error || 'Failed to create checkout session');
+            // Handle different error types
+            if (data.setupRequired) {
+                showTransactionModal('error', 'Stripe is not installed. Please contact support to enable credit card payments.');
+            } else if (data.configRequired) {
+                showTransactionModal('error', 'Stripe is not configured. Please contact support to enable credit card payments.');
+            } else {
+                throw new Error(data.error || 'Failed to create checkout session');
+            }
         }
         
     } catch (err) {
@@ -329,7 +489,7 @@ async function processStripePayment() {
 // Save subscription to database
 async function saveSubscription(subscriptionData) {
     try {
-        const response = await fetch('/api/save-subscription.php', {
+        const response = await fetch('api/save-subscription.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -388,7 +548,12 @@ function hideTransactionModal() {
 // Wallet Selection Modal
 async function showWalletSelectionModal() {
     return new Promise((resolve) => {
-        const wallets = walletAdapter.getSupportedWallets();
+        if (!window.walletAdapter) {
+            resolve(null);
+            return;
+        }
+        
+        const wallets = window.walletAdapter.getSupportedWallets();
         const modal = document.createElement('div');
         modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
         modal.innerHTML = `
@@ -504,12 +669,92 @@ function showInsufficientBalanceModal(required, current, shortfall) {
 document.addEventListener('DOMContentLoaded', () => {
     initializePaymentModal();
     
-    // Auto-connect if wallet was previously connected
-    const savedWallet = localStorage.getItem('preferredWallet');
-    if (savedWallet && walletAdapter.getSupportedWallets()[savedWallet]?.adapter) {
-        walletAdapter.connect(savedWallet).catch(console.error);
+    // Restore wallet connection state
+    const walletAddress = localStorage.getItem('walletAddress');
+    const walletType = localStorage.getItem('walletType');
+    
+    if (walletAddress) {
+        // Restore publicKey for hot wallets
+        if (!publicKey && walletType === 'hot') {
+            publicKey = walletAddress;
+            console.log('Restored hot wallet address:', walletAddress);
+        }
     }
+    
+    // Auto-connect if wallet was previously connected
+    const checkAndConnect = () => {
+        if (window.walletAdapter && walletType === 'browser') {
+            const savedWallet = localStorage.getItem('preferredWallet');
+            if (savedWallet && window.walletAdapter.getSupportedWallets()[savedWallet]?.adapter) {
+                window.walletAdapter.connect(savedWallet).catch(console.error);
+            }
+        }
+    };
+    
+    // Try after a short delay
+    setTimeout(checkAndConnect, 500);
 });
+
+// Process hot wallet payment
+async function processHotWalletPayment(walletAddress) {
+    // Show transaction modal
+    showTransactionModal('processing');
+    closePaymentModal();
+    
+    try {
+        // Call backend to process the payment with hot wallet
+        const response = await fetch('api/process-hot-wallet-payment.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                wallet: walletAddress,
+                plan: selectedPlan.name,
+                amount: selectedPlan.solPrice,
+                currency: 'SOL'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Get auto-renewal preference
+            const autoRenewCheckbox = document.getElementById('auto-renew-checkbox');
+            const autoRenew = autoRenewCheckbox ? autoRenewCheckbox.checked : true;
+            
+            // Save subscription to database
+            await saveSubscription({
+                wallet: walletAddress,
+                plan: selectedPlan.name,
+                amount: selectedPlan.solPrice,
+                currency: 'SOL',
+                txSignature: data.signature,
+                status: 'active',
+                auto_renew: autoRenew,
+                is_hot_wallet: true
+            });
+            
+            // Show success
+            showTransactionModal('success');
+        } else {
+            // Handle insufficient balance
+            if (data.error === 'Insufficient balance') {
+                const required = data.required || selectedPlan.solPrice;
+                const current = data.balance || 0;
+                const shortfall = required - current;
+                hideTransactionModal();
+                showInsufficientBalanceModal(required + 0.002, current, shortfall + 0.002);
+            } else {
+                throw new Error(data.error || 'Payment failed');
+            }
+        }
+        
+    } catch (err) {
+        console.error('Hot wallet payment failed:', err);
+        showTransactionModal('error', err.message || 'Transaction failed');
+    }
+}
 
 // Load Solana Web3.js
 const script = document.createElement('script');
@@ -518,3 +763,15 @@ script.onload = () => {
     console.log('Solana Web3.js loaded');
 };
 document.head.appendChild(script);
+
+// Expose functions to global scope
+window.openPaymentModal = openPaymentModal;
+window.closePaymentModal = closePaymentModal;
+window.connectWallet = connectWallet;
+window.disconnectWallet = disconnectWallet;
+window.processSOLPayment = processSOLPayment;
+window.processStripePayment = processStripePayment;
+window.processHotWalletPayment = processHotWalletPayment;
+window.showWalletSelectionModal = showWalletSelectionModal;
+window.showWalletInstallPrompt = showWalletInstallPrompt;
+window.hideTransactionModal = hideTransactionModal;

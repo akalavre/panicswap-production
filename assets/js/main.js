@@ -1,6 +1,11 @@
+// Comment out imports for now - they require module type script tag
+// import protectionEvents from './protection-events.js';
+// import autoSell from './auto-sell.js';
+
 // Configuration
-const API_BASE_URL = 'http://localhost:3001/api'; // Backend server URL
-const WS_URL = 'ws://localhost:3001'; // WebSocket URL for real-time updates
+const API_BASE_URL = window.location.origin + '/PanicSwap-php/api'; // PHP API URL
+const WS_URL = 'ws://localhost:3001'; // WebSocket URL for real-time updates (optional - backend service)
+const USE_BACKEND_API = false; // Set to true only if Node.js backend is running
 
 // Global state
 let walletState = {
@@ -33,6 +38,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeWallet();
     initializeRealTimeUpdates();
     initializeProtectionMonitoring();
+    
+    // Set Supabase credentials if available
+    if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+        window.SUPABASE_URL = window.SUPABASE_URL || '';
+        window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
+    }
 });
 
 // Initialize advanced animations
@@ -171,6 +182,8 @@ function initializeHeader() {
     let ticking = false;
     
     function updateHeader() {
+        if (!headerContainer) return; // Guard against null element
+        
         const currentScrollY = window.scrollY;
         
         if (currentScrollY > 10) {
@@ -279,7 +292,7 @@ function initializeHero() {
     
     if (heroProtectBtn) {
         heroProtectBtn.addEventListener('click', function() {
-            window.location.href = 'protect.php';
+            window.location.href = 'dashboard.php';
         });
     }
     
@@ -304,8 +317,10 @@ function initializeHero() {
 
 // Initialize real-time updates
 function initializeRealTimeUpdates() {
-    // Connect to WebSocket for real-time updates
-    connectWebSocket();
+    // Connect to WebSocket for real-time updates (only if backend is enabled)
+    if (USE_BACKEND_API) {
+        connectWebSocket();
+    }
     
     // Update price displays
     setInterval(updatePriceDisplays, 5000);
@@ -313,7 +328,7 @@ function initializeRealTimeUpdates() {
 
 // WebSocket reconnection settings
 let wsReconnectAttempts = 0;
-const maxReconnectAttempts = 3;
+const maxReconnectAttempts = 1; // Only try once to avoid console spam
 let wsReconnectTimeout = null;
 
 // Connect to WebSocket
@@ -341,10 +356,10 @@ function connectWebSocket() {
         
         ws.onerror = function(error) {
             // Don't log error if backend is not running
-            if (wsReconnectAttempts < maxReconnectAttempts) {
-                console.warn('WebSocket connection failed, attempt', wsReconnectAttempts + 1);
+            if (wsReconnectAttempts === 0) {
+                console.log('WebSocket backend not running. Real-time updates disabled.');
             }
-            updateNetworkStatus('error');
+            updateNetworkStatus('degraded');
         };
         
         ws.onclose = function() {
@@ -413,6 +428,17 @@ function updateNetworkStatus(status) {
 
 // Update rug statistics with animation
 async function updateRugStats() {
+    if (!USE_BACKEND_API) {
+        // Use static values when backend is not available
+        const rugAmountElement = document.getElementById('rug-amount');
+        if (rugAmountElement) {
+            const currentValue = parseInt(rugAmountElement.textContent) || 0;
+            const newValue = 2500000; // Static value for demo
+            animateValue(rugAmountElement, currentValue, newValue, 1000);
+        }
+        return;
+    }
+    
     try {
         const stats = await apiCall('stats/rugs');
         const rugAmountElement = document.getElementById('rug-amount');
@@ -429,13 +455,32 @@ async function updateRugStats() {
 // Initialize protection monitoring
 function initializeProtectionMonitoring() {
     if (walletState.connected) {
-        loadProtectedTokens();
-        startMonitoring();
+        // Initialize protection events for real-time notifications
+        if (window.protectionEvents) {
+            window.protectionEvents.init(walletState.address).catch(err => {
+                console.error('Failed to initialize protection events:', err);
+            });
+        }
+        
+        // Initialize auto-sell module
+        if (window.autoSell) {
+            window.autoSell.init();
+        }
+        
+        if (USE_BACKEND_API) {
+            loadProtectedTokens();
+            startMonitoring();
+        }
     }
 }
 
 // Load protected tokens
 async function loadProtectedTokens() {
+    if (!USE_BACKEND_API) {
+        // Skip if backend is not available
+        return;
+    }
+    
     try {
         const response = await apiCall(`protected-tokens/${walletState.address}`);
         protectionState.activeProtections = response.tokens || [];
@@ -447,7 +492,7 @@ async function loadProtectedTokens() {
 
 // Start monitoring
 async function startMonitoring() {
-    if (!walletState.connected || protectionState.monitoring) return;
+    if (!USE_BACKEND_API || !walletState.connected || protectionState.monitoring) return;
     
     try {
         await apiCall('monitoring/start', {
@@ -459,10 +504,12 @@ async function startMonitoring() {
         });
         
         protectionState.monitoring = true;
-        showNotification('Protection monitoring started', 'success');
+        // Only show notification for real events, not automatic starts
+        // showNotification('Protection monitoring started', 'success');
     } catch (error) {
         console.error('Failed to start monitoring:', error);
-        showNotification('Failed to start monitoring', 'error');
+        // Don't show notification for monitoring start failures
+        // showNotification('Failed to start monitoring', 'error');
     }
 }
 
@@ -489,7 +536,7 @@ async function connectWallet() {
     try {
         // Check if Phantom wallet is installed
         if (!window.solana || !window.solana.isPhantom) {
-            alert('Please install Phantom wallet to continue');
+            showNotification('Please install Phantom wallet to continue', 'error');
             window.open('https://phantom.app/', '_blank');
             return;
         }
@@ -517,8 +564,8 @@ async function connectWallet() {
         // Initialize protection monitoring
         initializeProtectionMonitoring();
         
-        // Show success message with animation
-        showNotification('Wallet connected successfully!', 'success');
+        // Don't show notification for wallet connection - it's obvious from UI change
+        // showNotification('Wallet connected successfully!', 'success');
         
     } catch (err) {
         console.error('Error connecting wallet:', err);
@@ -528,6 +575,8 @@ async function connectWallet() {
 
 // Register wallet with backend
 async function registerWallet(address) {
+    if (!USE_BACKEND_API) return;
+    
     try {
         await apiCall('wallet/register', {
             method: 'POST',
@@ -540,6 +589,12 @@ async function registerWallet(address) {
 
 // Load wallet data
 async function loadWalletData() {
+    if (!USE_BACKEND_API) {
+        // Initialize with empty data when backend is not available
+        walletState.tokens = [];
+        return;
+    }
+    
     try {
         // Load wallet tokens
         const tokens = await apiCall(`wallet/${walletState.address}/tokens`);
@@ -709,36 +764,154 @@ function showWalletMenu(e) {
     });
 }
 
-// Enhanced notification with better animations
-function showNotification(message, type = 'info') {
+// Enhanced notification with sexy dashboard-matching design
+function showNotification(message, type = 'info', duration = 4000) {
+    // Create unique ID for this notification
+    const notificationId = 'notification-' + Date.now();
+    
+    // Icon based on type
+    const icons = {
+        success: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>`,
+        error: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>`,
+        info: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>`,
+        warning: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>`
+    };
+    
+    // Color schemes based on type
+    const colorSchemes = {
+        success: {
+            bg: 'bg-gradient-to-r from-green-900/90 to-green-800/90',
+            border: 'border-green-500/30',
+            icon: 'text-green-400',
+            text: 'text-green-50',
+            glow: 'rgba(34, 197, 94, 0.3)'
+        },
+        error: {
+            bg: 'bg-gradient-to-r from-red-900/90 to-red-800/90',
+            border: 'border-red-500/30',
+            icon: 'text-red-400',
+            text: 'text-red-50',
+            glow: 'rgba(239, 68, 68, 0.3)'
+        },
+        info: {
+            bg: 'bg-gradient-to-r from-blue-900/90 to-blue-800/90',
+            border: 'border-blue-500/30',
+            icon: 'text-blue-400',
+            text: 'text-blue-50',
+            glow: 'rgba(59, 130, 246, 0.3)'
+        },
+        warning: {
+            bg: 'bg-gradient-to-r from-orange-900/90 to-orange-800/90',
+            border: 'border-orange-500/30',
+            icon: 'text-orange-400',
+            text: 'text-orange-50',
+            glow: 'rgba(251, 146, 60, 0.3)'
+        }
+    };
+    
+    const scheme = colorSchemes[type] || colorSchemes.info;
+    
     const notification = document.createElement('div');
-    notification.className = `fixed top-20 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-        type === 'success' ? 'bg-green-600' :
-        type === 'error' ? 'bg-red-600' :
-        'bg-blue-600'
-    } text-white transform transition-all opacity-0`;
+    notification.id = notificationId;
+    notification.className = `fixed top-24 right-6 z-[100] transform transition-all duration-500 ease-out translate-x-full opacity-0`;
     
     notification.innerHTML = `
-        <div class="flex items-center space-x-3">
-            <span>${message}</span>
+        <div class="${scheme.bg} backdrop-blur-xl border ${scheme.border} rounded-2xl shadow-2xl overflow-hidden min-w-[320px] max-w-[420px]" style="box-shadow: 0 0 40px ${scheme.glow}, 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+            <!-- Animated background gradient -->
+            <div class="absolute inset-0 opacity-30">
+                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
+            </div>
+            
+            <!-- Content -->
+            <div class="relative px-5 py-4">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon container with pulse -->
+                    <div class="flex-shrink-0">
+                        <div class="relative">
+                            <div class="absolute inset-0 ${scheme.icon} blur-xl opacity-50 animate-pulse"></div>
+                            <div class="${scheme.icon} relative">
+                                ${icons[type] || icons.info}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Message -->
+                    <div class="flex-1 pt-0.5">
+                        <p class="${scheme.text} text-sm font-medium leading-relaxed">
+                            ${message}
+                        </p>
+                        <p class="text-xs ${scheme.text} opacity-60 mt-1">
+                            ${new Date().toLocaleTimeString()}
+                        </p>
+                    </div>
+                    
+                    <!-- Close button -->
+                    <button onclick="closeNotification('${notificationId}')" class="${scheme.icon} opacity-60 hover:opacity-100 transition-opacity">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Progress bar -->
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-black/20">
+                    <div class="h-full ${scheme.bg} animate-shrink" style="animation-duration: ${duration}ms;"></div>
+                </div>
+            </div>
         </div>
     `;
     
     document.body.appendChild(notification);
     
-    // Add fade effect
-    setTimeout(() => {
-        notification.classList.remove('opacity-0');
-        notification.classList.add('animate-slide-in');
-    }, 10);
+    // Add shimmer animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        @keyframes shrink {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+        .animate-shimmer {
+            animation: shimmer 2s infinite;
+        }
+        .animate-shrink {
+            animation: shrink linear forwards;
+        }
+    `;
+    document.head.appendChild(style);
     
-    // Remove with fade out
+    // Animate in
+    requestAnimationFrame(() => {
+        notification.classList.remove('translate-x-full', 'opacity-0');
+        notification.classList.add('translate-x-0', 'opacity-100');
+    });
+    
+    // Auto remove
     setTimeout(() => {
-        notification.classList.add('animate-fade-out', 'translate-x-full');
+        closeNotification(notificationId);
+    }, duration);
+}
+
+// Close notification function
+window.closeNotification = function(notificationId) {
+    const notification = document.getElementById(notificationId);
+    if (notification) {
+        notification.classList.add('translate-x-full', 'opacity-0');
         setTimeout(() => {
             notification.remove();
-        }, 300);
-    }, 3000);
+        }, 500);
+    }
 }
 
 // Handle rug detection with animation
@@ -859,7 +1032,7 @@ function updateTokenPrice(tokenAddress, price) {
 
 // Update price displays
 async function updatePriceDisplays() {
-    if (!walletState.connected || walletState.tokens.length === 0) return;
+    if (!walletState.connected || !Array.isArray(walletState.tokens) || walletState.tokens.length === 0) return;
     
     try {
         const prices = await apiCall(`prices/${walletState.tokens.map(t => t.address).join(',')}`);
@@ -944,7 +1117,7 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-// Protection functions for protect.php
+// Protection functions
 window.protectToken = async function(tokenAddress, settings) {
     try {
         const response = await apiCall('protect', {

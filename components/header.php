@@ -30,9 +30,6 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 <a href="dashboard.php" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                     Dashboard
                 </a>
-                <a href="protect.php" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'protect' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
-                    Protect
-                </a>
                 <a href="#pricing" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-300 hover:text-white hover:bg-white/5">
                     Pricing
                 </a>
@@ -68,9 +65,6 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
             </a>
             <a href="dashboard.php" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                 Dashboard
-            </a>
-            <a href="protect.php" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'protect' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
-                Protect
             </a>
             <a href="#pricing" class="block px-4 py-3 rounded-lg text-base font-medium transition-all text-gray-300 hover:text-white hover:bg-white/5">
                 Pricing

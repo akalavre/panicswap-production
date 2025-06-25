@@ -48,8 +48,7 @@
                 <h3 class="text-white font-semibold mb-6">Product</h3>
                 <ul class="space-y-3">
                     <li><a href="dashboard.php" class="text-gray-400 hover:text-white transition-colors">Dashboard</a></li>
-                    <li><a href="protect.php" class="text-gray-400 hover:text-white transition-colors">Protect Tokens</a></li>
-                    <li><a href="#pricing" class="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
+                    <li><a href="how-it-works.php#pricing" class="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
                     <li><a href="how-it-works.php" class="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
                     <li><a href="#" class="text-gray-400 hover:text-white transition-colors">API Docs</a></li>
                 </ul>
@@ -59,11 +58,11 @@
             <div>
                 <h3 class="text-white font-semibold mb-6">Company</h3>
                 <ul class="space-y-3">
-                    <li><a href="#" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-                    <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Security</a></li>
-                    <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
-                    <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                    <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+                    <li><a href="about.php" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
+                    <li><a href="security.php" class="text-gray-400 hover:text-white transition-colors">Security</a></li>
+                    <li><a href="terms.php" class="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
+                    <li><a href="privacy.php" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                    <li><a href="contact.php" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
                 </ul>
             </div>
         </div>
@@ -72,7 +71,7 @@
         <div class="pt-8 border-t border-white/5">
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <p class="text-gray-500 text-sm mb-4 md:mb-0">
-                    © 2024 PanicSwap. All rights reserved. Not financial advice.
+                    © 2025 PanicSwap. All rights reserved. Not financial advice.
                 </p>
                 
                 <div class="flex items-center space-x-6">

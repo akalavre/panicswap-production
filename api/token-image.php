@@ -8,7 +8,7 @@ $imageUrl = $_GET['url'] ?? '';
 
 if (empty($imageUrl)) {
     // Redirect to placeholder
-    header('Location: /assets/images/token-placeholder.svg');
+    header('Location: ../assets/images/token-placeholder.svg');
     exit;
 }
 
@@ -23,7 +23,7 @@ if (strpos($imageUrl, 'ipfs://') === 0) {
 
 // Validate URL
 if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
-    header('Location: /assets/images/token-placeholder.svg');
+    header('Location: ../assets/images/token-placeholder.svg');
     exit;
 }
 
@@ -47,6 +47,6 @@ if ($httpCode === 200 && $imageData) {
     echo $imageData;
 } else {
     // Redirect to placeholder on error
-    header('Location: /assets/images/token-placeholder.svg');
+    header('Location: /PanicSwap-php/assets/images/token-placeholder.svg');
 }
 ?>

@@ -166,4 +166,9 @@ export class SimpleCache<T> {
       }
     }
   }
+  
+  // Delete a specific key
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
 }

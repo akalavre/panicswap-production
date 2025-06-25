@@ -118,7 +118,8 @@
             if (!sessionId) return;
             
             try {
-                const response = await fetch('/api/verify-payment.php?session_id=' + sessionId);
+                // First verify the payment
+                const response = await fetch('api/verify-payment.php?session_id=' + sessionId);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -126,6 +127,16 @@
                     if (data.nextBilling) {
                         const date = new Date(data.nextBilling);
                         document.getElementById('next-billing').textContent = date.toLocaleDateString();
+                    }
+                    
+                    // Also save to Supabase by calling verify-payment with POST
+                    const walletAddress = localStorage.getItem('walletAddress');
+                    if (walletAddress) {
+                        await fetch('api/verify-payment.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: sessionId })
+                        });
                     }
                 }
             } catch (err) {

@@ -18,28 +18,28 @@ define('STRIPE_SECRET_KEY', $_ENV['STRIPE_SECRET_KEY'] ?? 'sk_test_your_test_key
 define('STRIPE_PUBLISHABLE_KEY', $_ENV['STRIPE_PUBLISHABLE_KEY'] ?? 'pk_test_your_test_key_here');
 define('STRIPE_WEBHOOK_SECRET', $_ENV['STRIPE_WEBHOOK_SECRET'] ?? 'whsec_your_webhook_secret_here');
 
-// Set Stripe API Key
-\Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+// Don't set API key here - let individual scripts do it after ensuring all dependencies are loaded
+// \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
 
 // Pricing Configuration (in cents)
 define('STRIPE_PRICES', [
     'pro' => [
         'name' => 'Pro Plan',
-        'amount' => 16104, // $161.04
+        'amount' => 7900, // $79.00
         'currency' => 'usd',
         'interval' => 'month',
         'description' => 'Up to 50 tokens, < 2s response time'
     ],
     'degen' => [
         'name' => 'Degen Mode',
-        'amount' => 32363, // $323.63
+        'amount' => 14900, // $149.00
         'currency' => 'usd',
         'interval' => 'month',
         'description' => 'Up to 100 tokens, < 1s response, Pump.fun integration'
     ],
     'enterprise' => [
         'name' => 'Enterprise Plan',
-        'amount' => 48612, // $486.12
+        'amount' => 39900, // $399.00
         'currency' => 'usd',
         'interval' => 'month',
         'description' => 'Unlimited tokens, all DEXs, dedicated support'

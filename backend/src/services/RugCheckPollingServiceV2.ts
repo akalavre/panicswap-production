@@ -6,6 +6,8 @@ import axios from 'axios';
 import { pumpFunRugDetector } from './PumpFunRugDetector';
 import { withRateLimitRetry, BatchProcessor, SimpleCache } from '../utils/rateLimitWrapper';
 import { rugcheckConfig, isAuthorityBurned, getRiskLevel } from '../config/rugcheckConfig';
+import { pumpFunService } from './PumpFunService';
+import { EnhancedDevWalletService } from './EnhancedDevWalletService';
 
 interface TokenBatch {
   mint: string;
@@ -35,11 +37,38 @@ interface RugCheckData {
   liquidityCurrent: number;
   liquidityChange1h: number;
   liquidityChange24h: number;
+  // Enhanced dev activity fields
+  devActivityPctTotal?: number;
+  devActivity24hPct?: number;
+  devActivity1hPct?: number;
+  devWallets?: string[];
+  // Additional fields for ML integration
+  liquidityUSD?: number;
+  velocityMetrics?: VelocityMetrics;
+  tokenAge?: number;
 }
 
 interface LiquiditySnapshot {
   timestamp: number;
   liquidity: number;
+}
+
+interface VelocityMetrics {
+  liquidityVelocity: number;      // % change per minute
+  priceVelocity: number;          // % change per minute
+  holderVelocity: number;         // % change per minute
+  volumeVelocity: number;         // % change per minute
+  isHighVelocity: boolean;        // Any metric exceeds threshold
+  velocityScore: number;          // Combined velocity risk score (0-100)
+}
+
+interface TokenSnapshot {
+  timestamp: number;
+  liquidity: number;
+  price: number;
+  holderCount: number;
+  volume24h: number;
+  topHolderPercent: number;
 }
 
 export class RugCheckPollingServiceV2 {
@@ -56,6 +85,11 @@ export class RugCheckPollingServiceV2 {
   private devActivityCache: SimpleCache<{ pct: number; time: string | null }>;
   private honeypotCache: SimpleCache<'unknown' | 'safe' | 'warning'>;
   private liquidityHistoryCache: SimpleCache<LiquiditySnapshot[]>;
+  private enhancedDevWalletService: EnhancedDevWalletService;
+  
+  // Velocity tracking caches (NEW)
+  private tokenSnapshotCache: SimpleCache<TokenSnapshot[]>;
+  private velocityMetricsCache: SimpleCache<VelocityMetrics>;
 
   // Rate-limited API methods
   private rateLimitedGetTokenAccounts: typeof this.getRealHolderCount;
@@ -75,6 +109,13 @@ export class RugCheckPollingServiceV2 {
     this.devActivityCache = new SimpleCache(300000); // 5 minutes TTL
     this.honeypotCache = new SimpleCache(600000); // 10 minutes TTL
     this.liquidityHistoryCache = new SimpleCache(86400000); // 24 hours TTL
+    
+    // Initialize velocity tracking caches (NEW)
+    this.tokenSnapshotCache = new SimpleCache(3600000); // 1 hour TTL
+    this.velocityMetricsCache = new SimpleCache(60000); // 1 minute TTL for real-time velocity
+    
+    // Initialize enhanced dev wallet service
+    this.enhancedDevWalletService = new EnhancedDevWalletService();
 
     // Wrap methods with rate limit retry
     this.rateLimitedGetTokenAccounts = withRateLimitRetry(
@@ -199,6 +240,9 @@ export class RugCheckPollingServiceV2 {
     // First get token metadata to get creator address
     const tokenMetadata = await this.getTokenMetadata(mint);
     
+    // First identify dev wallets using enhanced service
+    const devWallets = await this.enhancedDevWalletService.identifyDevWallets(mint, tokenMetadata.creator);
+    
     // Fetch all other data in parallel
     const [
       holderCount,
@@ -208,46 +252,64 @@ export class RugCheckPollingServiceV2 {
       launchTime,
       devActivity,
       honeypotStatus,
-      liquidityData
+      liquidityData,
+      velocityMetrics,  // NEW
+      currentPrice      // NEW
     ] = await Promise.all([
       this.rateLimitedGetTokenAccounts(mint),
       this.rateLimitedGetCreatorBalance(mint),
       this.getLPLockedPercent(mint),
       this.rateLimitedGetBundlerCount(mint),
       this.getTokenLaunchTime(mint),
-      this.rateLimitedGetDevActivity(mint, tokenMetadata.creator),
+      this.enhancedDevWalletService.calculateDevWalletActivity(mint, devWallets),
       this.rateLimitedCheckHoneypot(mint),
-      this.getLiquidityMetrics(mint)
+      this.getLiquidityMetrics(mint),
+      this.calculateVelocityMetrics(mint),  // NEW
+      this.getTokenPrice(mint)              // NEW
     ]);
 
-    // Calculate risk score
+    // Calculate token age for risk adjustment
+    const tokenAge = launchTime ? Date.now() - new Date(launchTime).getTime() : null;
+    
+    // Calculate risk score with enhanced parameters
     const riskScore = this.calculateRiskScore({
+      tokenMint: mint,
       holderCount,
       creatorBalancePercent,
       lpLocked,
+      liquidityUSD: liquidityData.current,  // NEW: actual USD liquidity
       mintAuthority: tokenMetadata.mintAuthority,
       freezeAuthority: tokenMetadata.freezeAuthority,
       topHolders: tokenMetadata.topHolders,
-      devActivityPct: devActivity.pct,
-      honeypotStatus
+      devActivityPct: devActivity.pct_24h || devActivity.pct_total,
+      honeypotStatus,
+      velocityMetrics,  // NEW: velocity tracking
+      tokenAge         // NEW: age-based adjustments
     });
 
-    // Generate warnings
+    // Generate warnings with enhanced data
     const warnings = this.generateWarnings({
       holderCount,
       creatorBalancePercent,
       lpLocked,
+      liquidityUSD: liquidityData.current,  // NEW
       mintAuthority: tokenMetadata.mintAuthority,
       freezeAuthority: tokenMetadata.freezeAuthority,
       bundlerCount,
-      devActivityPct: devActivity.pct,
-      honeypotStatus
+      devActivityPct: devActivity.pct_24h || devActivity.pct_total,
+      honeypotStatus,
+      velocityMetrics,  // NEW
+      tokenAge         // NEW
     });
 
     return {
       tokenMint: mint,
       riskScore,
-      riskLevel: getRiskLevel(riskScore),
+      riskLevel: getRiskLevel(riskScore, {
+        liquidityUSD: liquidityData.current,
+        holderCount,
+        tokenAge: tokenAge || undefined
+      }),
       holderCount,
       creatorBalance: tokenMetadata.creatorBalance,
       creatorBalancePercent,
@@ -259,12 +321,17 @@ export class RugCheckPollingServiceV2 {
       warnings,
       lastChecked: Date.now(),
       launchTime,
-      devActivityPct: devActivity.pct,
-      devActivityTime: devActivity.time,
+      devActivityPct: devActivity.pct_24h || devActivity.pct_total || 0,
+      devActivityTime: devActivity.last_tx,
       honeypotStatus,
       liquidityCurrent: liquidityData.current,
       liquidityChange1h: liquidityData.change1h,
-      liquidityChange24h: liquidityData.change24h
+      liquidityChange24h: liquidityData.change24h,
+      // Enhanced dev activity fields
+      devActivityPctTotal: devActivity.pct_total || undefined,
+      devActivity24hPct: devActivity.pct_24h || undefined,
+      devActivity1hPct: devActivity.pct_1h || undefined,
+      devWallets: devActivity.dev_wallets
     };
   }
 
@@ -539,7 +606,7 @@ export class RugCheckPollingServiceV2 {
     }
   }
 
-  private async getTokenLaunchTime(mint: string): Promise<string | null> {
+  public async getTokenLaunchTime(mint: string): Promise<string | null> {
     try {
       // First check if we already have launch_time in the database
       const { data: existingData, error } = await supabase
@@ -642,13 +709,14 @@ export class RugCheckPollingServiceV2 {
       const url = rugcheckConfig.endpoints.heliusRpc;
       const now = Date.now();
       const oneDayAgo = now - (24 * 60 * 60 * 1000);
+      const oneHourAgo = now - (60 * 60 * 1000);
 
       // Get recent signatures for the creator wallet
       const signaturesResponse = await axios.post(url, {
         jsonrpc: "2.0",
         id: "get-dev-signatures",
         method: "getSignaturesForAddress",
-        params: [creator, { limit: 100 }]
+        params: [creator, { limit: 200 }] // Increased limit for better analysis
       });
 
       if (!signaturesResponse.data?.result || signaturesResponse.data.result.length === 0) {
@@ -659,7 +727,9 @@ export class RugCheckPollingServiceV2 {
 
       const signatures = signaturesResponse.data.result;
       let tokenMovements = 0;
+      let totalTokenAmount = 0;
       let lastActivityTime: string | null = null;
+      let recentActivity = false; // Track if there's activity in last hour (high risk)
 
       // Check transactions for token movements
       for (const sig of signatures) {
@@ -683,22 +753,63 @@ export class RugCheckPollingServiceV2 {
             const tx = txResponse.data.result.transaction;
             const instructions = tx.message?.instructions || [];
 
-            // Check for token transfers involving the mint
+            // Check for various types of suspicious activity
+            let hasTokenMovement = false;
+            let transferAmount = 0;
+
             for (const inst of instructions) {
-              if (inst.program === 'spl-token' && 
-                  (inst.parsed?.type === 'transfer' || inst.parsed?.type === 'transferChecked')) {
-                const info = inst.parsed?.info;
-                if (info && (info.mint === mint || info.tokenAccount?.includes(mint))) {
-                  tokenMovements++;
-                  if (!lastActivityTime && sig.blockTime) {
-                    lastActivityTime = new Date(sig.blockTime * 1000).toISOString();
+              // Check SPL token transfers
+              if (inst.program === 'spl-token') {
+                const parsed = inst.parsed;
+                
+                if (parsed?.type === 'transfer' || parsed?.type === 'transferChecked') {
+                  const info = parsed.info;
+                  if (info && (info.mint === mint)) {
+                    hasTokenMovement = true;
+                    transferAmount += parseFloat(info.amount || info.tokenAmount?.amount || '0');
+                    
+                    // Check if this is recent activity (within 1 hour)
+                    if (sig.blockTime && sig.blockTime * 1000 >= oneHourAgo) {
+                      recentActivity = true;
+                    }
                   }
                 }
+                
+                // Check for burn transactions (could indicate rug attempt)
+                else if (parsed?.type === 'burn') {
+                  const info = parsed.info;
+                  if (info && info.mint === mint) {
+                    hasTokenMovement = true;
+                    transferAmount += parseFloat(info.amount || '0');
+                  }
+                }
+                
+                // Check for closeAccount (removing token accounts)
+                else if (parsed?.type === 'closeAccount') {
+                  hasTokenMovement = true;
+                }
+              }
+              
+              // Check for Raydium/Jupiter swap transactions
+              else if (inst.program === 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4' || // Jupiter
+                       inst.program === '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8') { // Raydium
+                // These could indicate large sells by the dev
+                hasTokenMovement = true;
+              }
+            }
+
+            if (hasTokenMovement) {
+              tokenMovements++;
+              totalTokenAmount += transferAmount;
+              
+              if (!lastActivityTime && sig.blockTime) {
+                lastActivityTime = new Date(sig.blockTime * 1000).toISOString();
               }
             }
           }
         } catch (error) {
           // Continue checking other transactions
+          console.warn(`Failed to analyze transaction ${sig.signature}:`, error instanceof Error ? error.message : String(error));
         }
       }
 
@@ -707,10 +818,27 @@ export class RugCheckPollingServiceV2 {
         sig.blockTime && sig.blockTime * 1000 >= oneDayAgo
       ).length;
       
-      const activityPct = totalRecentTxs > 0 ? (tokenMovements / totalRecentTxs) * 100 : 0;
+      let activityPct = totalRecentTxs > 0 ? (tokenMovements / totalRecentTxs) * 100 : 0;
+      
+      // Apply risk multipliers for suspicious patterns
+      if (recentActivity && tokenMovements > 0) {
+        // Recent activity is more suspicious - apply multiplier
+        activityPct = Math.min(activityPct * 1.5, 100);
+      }
+      
+      if (tokenMovements >= 5) {
+        // High frequency trading could indicate dumping
+        activityPct = Math.min(activityPct * 1.2, 100);
+      }
 
-      const result = { pct: activityPct, time: lastActivityTime };
+      const result = { 
+        pct: Math.round(activityPct * 100) / 100, // Round to 2 decimal places
+        time: lastActivityTime 
+      };
+      
       this.devActivityCache.set(mint, result);
+      console.log(`Dev activity for ${mint}: ${result.pct}% (${tokenMovements}/${totalRecentTxs} txs, recent: ${recentActivity})`);
+      
       return result;
 
     } catch (error) {
@@ -881,73 +1009,337 @@ export class RugCheckPollingServiceV2 {
 
   private async getCurrentLiquidity(mint: string): Promise<number> {
     try {
-      // This is a simplified version - in production you'd check multiple DEXes
-      // For now, we'll get it from the database if available
-      const { data } = await supabase
-        .from('token_prices')
+      // First check if we have actual liquidity data from pools
+      const { data: poolData } = await supabase
+        .from('pool_liquidity')
         .select('liquidity_usd')
         .eq('token_mint', mint)
         .order('timestamp', { ascending: false })
         .limit(1)
         .single();
+        
+      if (poolData?.liquidity_usd) {
+        return poolData.liquidity_usd;
+      }
       
-      return data?.liquidity_usd || 0;
+      // Try pump.fun API if available
+      const pumpFunData = await pumpFunService.getTokenData(mint);
+      if (pumpFunData && pumpFunData.usd_market_cap) {
+        // For pump.fun tokens, estimate liquidity as a portion of market cap
+        // Typically liquidity is around 10-20% of market cap for active tokens
+        return pumpFunData.usd_market_cap * 0.15;
+      }
+
+      // Fallback to database
+      const { data } = await supabase
+        .from('token_prices')
+        .select('price, market_cap')
+        .eq('token_mint', mint)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (data?.market_cap) {
+        // Estimate liquidity as 15% of market cap
+        return data.market_cap * 0.15;
+      }
+
+      return 0;
+    } catch (error) {
+      console.error('Error fetching liquidity:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Calculate velocity metrics for real-time risk assessment
+   */
+  private async calculateVelocityMetrics(mint: string): Promise<VelocityMetrics> {
+    try {
+      // Check cache first
+      const cached = this.velocityMetricsCache.get(mint);
+      if (cached) return cached;
+      
+      const now = Date.now();
+      const velocityWindow = rugcheckConfig.riskScoring.criticalThresholds.velocityWindow;
+      const criticalPercent = rugcheckConfig.riskScoring.criticalThresholds.criticalVelocityPercent;
+      
+      // Get or initialize snapshot history
+      let snapshots = this.tokenSnapshotCache.get(mint) || [];
+      
+      // Get current metrics
+      const currentLiquidity = await this.getCurrentLiquidity(mint);
+      const currentPrice = await this.getTokenPrice(mint);
+      const currentHolders = await this.getRealHolderCount(mint);
+      const currentVolume = await this.get24hVolume(mint);
+      
+      // Get top holder data
+      const { data: tokenData } = await supabase
+        .from('rugcheck_reports')
+        .select('top_holders')
+        .eq('token_mint', mint)
+        .single();
+        
+      const topHolderPercent = tokenData?.top_holders?.[0]?.percentage || 0;
+      
+      // Add current snapshot
+      const currentSnapshot: TokenSnapshot = {
+        timestamp: now,
+        liquidity: currentLiquidity,
+        price: currentPrice,
+        holderCount: currentHolders,
+        volume24h: currentVolume,
+        topHolderPercent
+      };
+      
+      snapshots.push(currentSnapshot);
+      
+      // Keep only recent snapshots (last hour)
+      snapshots = snapshots.filter(s => s.timestamp > now - 3600000);
+      snapshots.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Update cache
+      this.tokenSnapshotCache.set(mint, snapshots);
+      
+      // Calculate velocities (% change per minute)
+      const windowStart = now - velocityWindow;
+      const windowSnapshot = snapshots.find(s => s.timestamp >= windowStart) || snapshots[0];
+      
+      if (!windowSnapshot || windowSnapshot === currentSnapshot) {
+        // Not enough data for velocity
+        const noVelocity: VelocityMetrics = {
+          liquidityVelocity: 0,
+          priceVelocity: 0,
+          holderVelocity: 0,
+          volumeVelocity: 0,
+          isHighVelocity: false,
+          velocityScore: 0
+        };
+        this.velocityMetricsCache.set(mint, noVelocity);
+        return noVelocity;
+      }
+      
+      const timeElapsedMinutes = (now - windowSnapshot.timestamp) / 60000;
+      
+      // Calculate velocity metrics (% change per minute)
+      const liquidityVelocity = windowSnapshot.liquidity > 0 ? 
+        Math.abs(((currentSnapshot.liquidity - windowSnapshot.liquidity) / windowSnapshot.liquidity) * 100 / timeElapsedMinutes) : 0;
+        
+      const priceVelocity = windowSnapshot.price > 0 ?
+        Math.abs(((currentSnapshot.price - windowSnapshot.price) / windowSnapshot.price) * 100 / timeElapsedMinutes) : 0;
+        
+      const holderVelocity = windowSnapshot.holderCount > 0 ?
+        Math.abs(((currentSnapshot.holderCount - windowSnapshot.holderCount) / windowSnapshot.holderCount) * 100 / timeElapsedMinutes) : 0;
+        
+      const volumeVelocity = windowSnapshot.volume24h > 0 ?
+        Math.abs(((currentSnapshot.volume24h - windowSnapshot.volume24h) / windowSnapshot.volume24h) * 100 / timeElapsedMinutes) : 0;
+      
+      // Check for rapid changes
+      const isHighVelocity = liquidityVelocity > criticalPercent / 5 || // 6% per minute = 30% in 5 min
+                            priceVelocity > criticalPercent / 5 ||
+                            holderVelocity > 10; // 10% holder change per minute is suspicious
+      
+      // Calculate combined velocity score (0-100)
+      const velocityScore = Math.min(100,
+        (liquidityVelocity * 0.4) +  // Liquidity most important
+        (priceVelocity * 0.3) +
+        (holderVelocity * 0.2) +
+        (volumeVelocity * 0.1)
+      );
+      
+      const metrics: VelocityMetrics = {
+        liquidityVelocity: Math.round(liquidityVelocity * 100) / 100,
+        priceVelocity: Math.round(priceVelocity * 100) / 100,
+        holderVelocity: Math.round(holderVelocity * 100) / 100,
+        volumeVelocity: Math.round(volumeVelocity * 100) / 100,
+        isHighVelocity,
+        velocityScore: Math.round(velocityScore)
+      };
+      
+      // Log critical velocities
+      if (isHighVelocity) {
+        console.warn(`🚨 HIGH VELOCITY DETECTED for ${mint}:`, metrics);
+      }
+      
+      this.velocityMetricsCache.set(mint, metrics);
+      return metrics;
+      
+    } catch (error) {
+      console.error('Error calculating velocity metrics:', error);
+      return {
+        liquidityVelocity: 0,
+        priceVelocity: 0,
+        holderVelocity: 0,
+        volumeVelocity: 0,
+        isHighVelocity: false,
+        velocityScore: 0
+      };
+    }
+  }
+
+  /**
+   * Get 24h volume for a token
+   */
+  private async get24hVolume(mint: string): Promise<number> {
+    try {
+      const { data } = await supabase
+        .from('token_volumes')
+        .select('volume_24h_usd')
+        .eq('token_mint', mint)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+        
+      return data?.volume_24h_usd || 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  private async getTokenPrice(mint: string): Promise<number> {
+    try {
+      // Get from price cache or fetch fresh
+      const { data } = await supabase
+        .from('token_prices')
+        .select('price')
+        .eq('token_mint', mint)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+      
+      return data?.price || 0;
     } catch (error) {
       return 0;
     }
   }
 
   private calculateRiskScore(data: any): number {
-    const { weights, minimumScores } = rugcheckConfig.riskScoring;
+    const { weights, minimumScores, criticalThresholds } = rugcheckConfig.riskScoring;
     let score = 0;
+    
+    // Store individual risk components for transparency
+    const riskComponents = {
+      holderRisk: 0,
+      liquidityRisk: 0,
+      creatorRisk: 0,
+      velocityRisk: 0,
+      authorityRisk: 0,
+      activityRisk: 0
+    };
 
-    // Holder count risk (inverse - fewer holders = higher risk)
-    const holderRisk = data.holderCount > 0 ? 
-      Math.max(0, 100 - Math.min(100, data.holderCount)) : 100;
-    score += (holderRisk * weights.holderCount) / 100;
+    // 1. Holder count risk - Fixed logic (fewer holders = higher risk)
+    if (data.holderCount === 0) {
+      score = Math.max(score, minimumScores.zeroHolders);
+      riskComponents.holderRisk = 100;
+    } else {
+      // Logarithmic scale: 1-10 holders = high risk, 100+ = low risk
+      const holderRisk = data.holderCount < criticalThresholds.minHolders ? 90 :
+                        data.holderCount < 50 ? 70 :
+                        data.holderCount < 100 ? 40 :
+                        data.holderCount < 500 ? 20 : 10;
+      riskComponents.holderRisk = holderRisk;
+      score += (holderRisk * weights.holderCount) / 100;
+    }
 
-    // Creator balance risk
-    const creatorRisk = Math.min(100, data.creatorBalancePercent * 2);
+    // 2. Liquidity risk - CRITICAL FIX (check actual USD value)
+    const liquidityUSD = data.liquidityUSD || 0;
+    if (liquidityUSD === 0) {
+      score = Math.max(score, minimumScores.noLiquidity);
+      riskComponents.liquidityRisk = 100;
+    } else if (liquidityUSD < criticalThresholds.minLiquidityUSD) {
+      score = Math.max(score, minimumScores.lowLiquidity);
+      riskComponents.liquidityRisk = 90;
+    } else {
+      // Logarithmic scale for liquidity
+      const liquidityRisk = liquidityUSD < 1000 ? 80 :
+                           liquidityUSD < 5000 ? 60 :
+                           liquidityUSD < 10000 ? 40 :
+                           liquidityUSD < 50000 ? 20 : 10;
+      riskComponents.liquidityRisk = liquidityRisk;
+      score += (liquidityRisk * weights.liquidityUSD) / 100;
+    }
+
+    // 3. Creator balance risk
+    const creatorRisk = data.creatorBalancePercent > criticalThresholds.maxCreatorPercent ? 90 :
+                       data.creatorBalancePercent > 30 ? 70 :
+                       data.creatorBalancePercent > 20 ? 50 :
+                       data.creatorBalancePercent > 10 ? 30 : 10;
+    riskComponents.creatorRisk = creatorRisk;
     score += (creatorRisk * weights.creatorBalance) / 100;
 
-    // LP locked risk (inverse - more locked = lower risk)
+    // 4. Velocity risks (NEW - most important for rug detection)
+    if (data.velocityMetrics) {
+      const velocityScore = data.velocityMetrics.velocityScore || 0;
+      riskComponents.velocityRisk = velocityScore;
+      
+      // Liquidity velocity is most critical
+      if (data.velocityMetrics.liquidityVelocity > criticalThresholds.criticalVelocityPercent) {
+        score = Math.max(score, minimumScores.rapidLiquidityDrop);
+      }
+      
+      // Add weighted velocity scores
+      score += (data.velocityMetrics.liquidityVelocity * weights.liquidityVelocity) / 100;
+      score += (data.velocityMetrics.priceVelocity * weights.priceVelocity) / 100;
+      score += (data.velocityMetrics.holderVelocity * weights.holderVelocity) / 100;
+      
+      // High velocity override
+      if (data.velocityMetrics.isHighVelocity) {
+        score = Math.max(score, minimumScores.highVelocity);
+      }
+    }
+
+    // 5. LP locked risk (reduced importance)
     const lpRisk = 100 - data.lpLocked;
     score += (lpRisk * weights.lpLocked) / 100;
 
-    // Top holder concentration
+    // 6. Top holder concentration
     const topHolderRisk = data.topHolders.length > 0 ?
       Math.min(100, data.topHolders[0]?.percentage || 0) : 0;
     score += (topHolderRisk * weights.topHolders) / 100;
 
-    // Authority risks
+    // 7. Authority risks
     if (!isAuthorityBurned(data.mintAuthority)) {
       score += weights.mintAuthority;
       score = Math.max(score, minimumScores.activeMintAuthority);
+      riskComponents.authorityRisk += 50;
     }
 
     if (!isAuthorityBurned(data.freezeAuthority)) {
       score += weights.freezeAuthority;
       score = Math.max(score, minimumScores.activeFreezeAuthority);
+      riskComponents.authorityRisk += 50;
     }
 
-    // Dev activity risk (high activity = higher risk)
+    // 8. Dev activity risk (enhanced)
     if (data.devActivityPct > 50) {
-      score += 10; // Add 10 points for high dev activity
+      riskComponents.activityRisk = 80;
+      score += 15; // Increased from 10
+    } else if (data.devActivityPct > 30) {
+      riskComponents.activityRisk = 60;
+      score += 10;
     }
 
-    // Honeypot risk
+    // 9. Honeypot risk
     if (data.honeypotStatus === 'warning') {
-      score += 15; // Add 15 points for honeypot warning
-      score = Math.max(score, 70); // Minimum 70 score for honeypot warning
+      score += 20; // Increased from 15
+      score = Math.max(score, 75); // Increased from 70
     }
 
-    // Apply minimum scores for known exploits
+    // 10. Token age adjustment (NEW)
+    if (data.tokenAge && data.tokenAge < 3600000) { // Less than 1 hour old
+      score += 15; // New tokens are inherently riskier
+    } else if (data.tokenAge && data.tokenAge < 86400000) { // Less than 24 hours
+      score += 10;
+    }
+
+    // Apply all minimum score overrides
     if (data.creatorBalancePercent > 50) {
       score = Math.max(score, minimumScores.creatorMajority);
     }
 
-    if (data.lpLocked === 0) {
-      score = Math.max(score, minimumScores.noLiquidity);
+    // Log risk breakdown for critical scores
+    if (score >= 70) {
+      console.log(`High risk token ${data.tokenMint}: Score ${score}`, riskComponents);
     }
 
     return Math.min(100, Math.round(score));
@@ -955,38 +1347,67 @@ export class RugCheckPollingServiceV2 {
 
   private generateWarnings(data: any): string[] {
     const warnings: string[] = [];
+    const { criticalThresholds } = rugcheckConfig.riskScoring;
 
-    if (data.holderCount < 10) {
-      warnings.push(`Only ${data.holderCount} holders detected`);
+    // Critical warnings first
+    if (data.liquidityUSD !== undefined && data.liquidityUSD === 0) {
+      warnings.push('🚨 CRITICAL: Zero liquidity detected!');
+    } else if (data.liquidityUSD !== undefined && data.liquidityUSD < criticalThresholds.minLiquidityUSD) {
+      warnings.push(`🚨 CRITICAL: Extremely low liquidity ($${data.liquidityUSD.toFixed(2)})`);
     }
 
-    if (data.creatorBalancePercent > 20) {
-      warnings.push(`Creator holds ${data.creatorBalancePercent.toFixed(1)}% of supply`);
+    if (data.holderCount === 0) {
+      warnings.push('🚨 CRITICAL: No token holders detected!');
+    } else if (data.holderCount < criticalThresholds.minHolders) {
+      warnings.push(`⚠️ Only ${data.holderCount} holders detected`);
+    }
+
+    // Velocity warnings
+    if (data.velocityMetrics?.isHighVelocity) {
+      if (data.velocityMetrics.liquidityVelocity > criticalThresholds.criticalVelocityPercent / 5) {
+        warnings.push(`🚨 CRITICAL: Rapid liquidity drop detected (${data.velocityMetrics.liquidityVelocity.toFixed(1)}%/min)`);
+      }
+      if (data.velocityMetrics.priceVelocity > criticalThresholds.criticalVelocityPercent / 5) {
+        warnings.push(`⚠️ Rapid price movement detected (${data.velocityMetrics.priceVelocity.toFixed(1)}%/min)`);
+      }
+    }
+
+    if (data.creatorBalancePercent > criticalThresholds.maxCreatorPercent) {
+      warnings.push(`🚨 Creator holds ${data.creatorBalancePercent.toFixed(1)}% of supply (>40%)`);
+    } else if (data.creatorBalancePercent > 20) {
+      warnings.push(`⚠️ Creator holds ${data.creatorBalancePercent.toFixed(1)}% of supply`);
     }
 
     if (data.lpLocked < 50) {
-      warnings.push(`Only ${data.lpLocked}% of LP is locked`);
+      warnings.push(`⚠️ Only ${data.lpLocked}% of LP is locked`);
     }
 
     if (!isAuthorityBurned(data.mintAuthority)) {
-      warnings.push('Mint authority is active');
+      warnings.push('⚠️ Mint authority is active - tokens can be created');
     }
 
     if (!isAuthorityBurned(data.freezeAuthority)) {
-      warnings.push('Freeze authority is active');
+      warnings.push('⚠️ Freeze authority is active - accounts can be frozen');
     }
 
     if (data.bundlerCount >= 5) {
-      warnings.push(`High bundler activity detected (${data.bundlerCount} bundlers)`);
+      warnings.push(`⚠️ High bundler activity detected (${data.bundlerCount} bundlers)`);
     }
 
-    // New warnings for additional data points
-    if (data.devActivityPct > 30) {
-      warnings.push(`Developer wallet shows ${data.devActivityPct.toFixed(1)}% token movement activity`);
+    // Dev activity warnings
+    if (data.devActivityPct > 50) {
+      warnings.push(`🚨 High dev wallet activity: ${data.devActivityPct.toFixed(1)}% token movements`);
+    } else if (data.devActivityPct > 30) {
+      warnings.push(`⚠️ Developer wallet shows ${data.devActivityPct.toFixed(1)}% token movement activity`);
     }
 
     if (data.honeypotStatus === 'warning') {
-      warnings.push('Potential honeypot detected - no successful sells found');
+      warnings.push('🚨 Potential honeypot - no successful sells found');
+    }
+
+    // Token age warning
+    if (data.tokenAge && data.tokenAge < 3600000) {
+      warnings.push('⚠️ Very new token (less than 1 hour old)');
     }
 
     return warnings;
@@ -1026,7 +1447,12 @@ export class RugCheckPollingServiceV2 {
           honeypot_status: update.honeypotStatus,
           liquidity_current: update.liquidityCurrent,
           liquidity_change_1h_pct: update.liquidityChange1h, // Database uses _pct suffix
-          liquidity_change_24h_pct: update.liquidityChange24h // Database uses _pct suffix
+          liquidity_change_24h_pct: update.liquidityChange24h, // Database uses _pct suffix
+          // Enhanced dev activity fields
+          dev_activity_pct_total: update.devActivityPctTotal || update.devActivityPct,
+          dev_activity_24h_pct: update.devActivity24hPct || update.devActivityPct,
+          dev_activity_1h_pct: update.devActivity1hPct || 0,
+          last_dev_tx: update.devActivityTime ? new Date(update.devActivityTime).toISOString() : null
         };
 
         // Only include launch_time if it's provided and we want to set it
@@ -1060,6 +1486,128 @@ export class RugCheckPollingServiceV2 {
       updates.forEach(update => {
         this.pendingUpdates.set(update.tokenMint, update);
       });
+    }
+  }
+
+  /**
+   * Check a single token immediately with optional override data
+   * Used by PoolMonitoringService when liquidity changes are detected
+   */
+  public async checkSingleToken(mint: string, overrides?: {
+    liquidityUSD?: number;
+    liquidityVelocity?: number;
+    forceUpdate?: boolean;
+    source?: string;
+  }): Promise<RugCheckData> {
+    console.log(`[RugCheckV2] Immediate check requested for ${mint}`, overrides);
+    
+    try {
+      // Validate mint
+      new PublicKey(mint);
+    } catch {
+      throw new Error(`Invalid mint address: ${mint}`);
+    }
+    
+    // Fetch current data
+    const tokenData = await this.fetchRugCheckData({
+      mint,
+      symbol: 'UNKNOWN',
+      platform: 'pump-fun'
+    });
+    
+    // Apply overrides if provided
+    if (overrides) {
+      if (overrides.liquidityUSD !== undefined) {
+        tokenData.liquidityCurrent = overrides.liquidityUSD;
+        tokenData.liquidityUSD = overrides.liquidityUSD;
+      }
+      
+      if (overrides.liquidityVelocity !== undefined) {
+        // Create or update velocity metrics
+        if (!tokenData.velocityMetrics) {
+          tokenData.velocityMetrics = {
+            liquidityVelocity: overrides.liquidityVelocity,
+            priceVelocity: 0,
+            holderVelocity: 0,
+            volumeVelocity: 0,
+            isHighVelocity: overrides.liquidityVelocity > 6, // 6% per minute threshold
+            velocityScore: Math.min(100, overrides.liquidityVelocity * 10)
+          };
+        } else {
+          tokenData.velocityMetrics.liquidityVelocity = overrides.liquidityVelocity;
+          tokenData.velocityMetrics.isHighVelocity = overrides.liquidityVelocity > 6;
+          tokenData.velocityMetrics.velocityScore = Math.min(100, 
+            (overrides.liquidityVelocity * 0.4 * 10) +
+            (tokenData.velocityMetrics.priceVelocity * 0.3) +
+            (tokenData.velocityMetrics.holderVelocity * 0.2) +
+            (tokenData.velocityMetrics.volumeVelocity * 0.1)
+          );
+        }
+      }
+    }
+    
+    // Recalculate risk score with updated data
+    const newRiskScore = this.calculateRiskScore(tokenData);
+    const newRiskLevel = getRiskLevel(newRiskScore, {
+      liquidityUSD: tokenData.liquidityUSD,
+      holderCount: tokenData.holderCount,
+      tokenAge: tokenData.tokenAge
+    });
+    
+    // Update the data
+    tokenData.riskScore = newRiskScore;
+    tokenData.riskLevel = newRiskLevel;
+    tokenData.warnings = this.generateWarnings(tokenData);
+    
+    // Force immediate database update if requested
+    if (overrides?.forceUpdate) {
+      console.log(`[RugCheckV2] Force updating ${mint} - Risk: ${newRiskScore} (${newRiskLevel})`);
+      
+      // Update database immediately
+      const { error } = await supabase
+        .from('rugcheck_reports')
+        .upsert({
+          token_mint: mint,
+          risk_score: newRiskScore,
+          risk_level: newRiskLevel,
+          liquidity_current: tokenData.liquidityCurrent,
+          warnings: tokenData.warnings,
+          last_checked: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          metadata: {
+            source: overrides.source || 'immediate_check',
+            velocityMetrics: tokenData.velocityMetrics
+          }
+        });
+        
+      if (error) {
+        console.error('Error updating risk score:', error);
+      }
+      
+      // Also update any cached data
+      this.pendingUpdates.set(mint, tokenData);
+    }
+    
+    return tokenData;
+  }
+  
+  /**
+   * Get latest data for a token
+   */
+  async getLatestData(tokenMint: string): Promise<RugCheckData | null> {
+    try {
+      const { data } = await supabase
+        .from('rugcheck_reports')
+        .select('*')
+        .eq('token_mint', tokenMint)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+        
+      return data;
+    } catch (error) {
+      console.error(`[RugCheckPollingServiceV2] Error getting latest data for ${tokenMint}:`, error);
+      return null;
     }
   }
 }

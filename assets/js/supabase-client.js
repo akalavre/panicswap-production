@@ -9,9 +9,14 @@ let supabaseClient = null;
 // Initialize Supabase when script loads
 function initializeSupabase() {
     if (typeof window !== 'undefined' && window.supabase) {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Create client with realtime disabled to prevent WebSocket errors
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            realtime: {
+                enabled: false
+            }
+        });
         window.supabaseClient = supabaseClient; // Make it globally available
-        console.log('Supabase client initialized successfully');
+        console.log('Supabase client initialized successfully (realtime disabled)');
         
         // Dispatch event to notify other scripts
         window.dispatchEvent(new Event('supabaseReady'));
@@ -45,13 +50,24 @@ class DashboardRealtime {
     constructor() {
         this.channels = {};
         this.listeners = {};
+        this.currentWallet = null;
+        this.isInitialized = false;
     }
     
     // Initialize real-time subscriptions for dashboard
     async initializeDashboard(walletAddress) {
         if (!supabaseClient || !walletAddress) return;
         
+        // Check if already initialized for this wallet
+        if (this.currentWallet === walletAddress && this.isInitialized) {
+            console.log('Dashboard real-time already initialized for wallet:', walletAddress);
+            return;
+        }
+        
         try {
+            // Clean up existing subscriptions first
+            this.cleanup();
+            
             // Subscribe to wallet notifications
             this.subscribeToWalletNotifications(walletAddress);
             
@@ -60,6 +76,9 @@ class DashboardRealtime {
             
             // Subscribe to protected tokens updates
             this.subscribeToProtectedTokens(walletAddress);
+            
+            this.currentWallet = walletAddress;
+            this.isInitialized = true;
             
             console.log('Dashboard real-time subscriptions initialized');
         } catch (error) {
@@ -117,22 +136,18 @@ class DashboardRealtime {
             this.channels[channelName].unsubscribe();
         }
         
-        // First get user ID from wallet address
-        this.getUserByWallet(walletAddress).then(user => {
-            if (!user) return;
-            
-            this.channels[channelName] = supabaseClient
-                .channel(channelName)
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'protected_tokens',
-                    filter: `user_id=eq.${user.id}`
-                }, (payload) => {
-                    this.handleProtectedTokenUpdate(payload);
-                })
-                .subscribe();
-        });
+        // Subscribe to wallet_tokens table instead (which exists)
+        this.channels[channelName] = supabaseClient
+            .channel(channelName)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'wallet_tokens',
+                filter: `wallet_address=eq.${walletAddress}`
+            }, (payload) => {
+                this.handleProtectedTokenUpdate(payload);
+            })
+            .subscribe();
     }
     
     // Handle wallet notification
@@ -144,12 +159,7 @@ class DashboardRealtime {
             
             // Show notification based on priority
             if (notification.priority === 'critical' || notification.priority === 'high') {
-                this.showAlert({
-                    type: notification.priority === 'critical' ? 'error' : 'warning',
-                    title: notification.title,
-                    message: notification.message,
-                    autoHide: notification.priority === 'critical' ? 0 : 5000
-                });
+showNotification(`${notification.title}: ${notification.message}`, notification.priority === 'critical' ? 'error' : 'warning');
             }
             
             // Update activity log
@@ -172,12 +182,7 @@ class DashboardRealtime {
         if (payload.eventType === 'INSERT') {
             const alert = payload.new;
             
-            this.showAlert({
-                type: alert.alert_type || 'info',
-                title: alert.title,
-                message: alert.message,
-                autoHide: alert.alert_type === 'critical' ? 0 : 10000
-            });
+showNotification(`${alert.title}: ${alert.message}`, alert.alert_type || 'info');
         }
     }
     
@@ -194,16 +199,18 @@ class DashboardRealtime {
     // Helper function to get user by wallet
     async getUserByWallet(walletAddress) {
         try {
-            const { data, error } = await supabaseClient
-                .from('users')
-                .select('*')
-                .eq('wallet_address', walletAddress)
-                .single();
+            // For now, we don't have a users table, so we'll return a mock user
+            // This prevents the 406 error and allows the app to function
+            console.log('getUserByWallet called for:', walletAddress);
             
-            if (error) throw error;
-            return data;
+            // Return a mock user object with necessary fields
+            return {
+                id: walletAddress, // Use wallet address as ID for now
+                wallet_address: walletAddress,
+                created_at: new Date().toISOString()
+            };
         } catch (error) {
-            console.error('Error fetching user:', error);
+            console.error('Error in getUserByWallet:', error);
             return null;
         }
     }
@@ -308,21 +315,28 @@ class DashboardRealtime {
 // Global instance
 const dashboardRealtime = new DashboardRealtime();
 
-// Auto-initialize when wallet is connected
+// Auto-initialize when wallet is connected - DISABLED to prevent WebSocket errors
+// Realtime features are not currently used in the app
+const ENABLE_REALTIME = false;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Wait for wallet connection
-    const checkWallet = setInterval(() => {
-        const walletAddress = localStorage.getItem('walletAddress');
-        if (walletAddress && supabaseClient) {
-            dashboardRealtime.initializeDashboard(walletAddress);
-            clearInterval(checkWallet);
-        }
-    }, 1000);
-    
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', () => {
-        dashboardRealtime.cleanup();
-    });
+    if (ENABLE_REALTIME) {
+        // Wait for wallet connection
+        const checkWallet = setInterval(() => {
+            const walletAddress = localStorage.getItem('walletAddress');
+            if (walletAddress && supabaseClient) {
+                dashboardRealtime.initializeDashboard(walletAddress);
+                clearInterval(checkWallet);
+            }
+        }, 1000);
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            dashboardRealtime.cleanup();
+        });
+    } else {
+        console.log('Supabase realtime subscriptions disabled');
+    }
 });
 
 // Export for use in other scripts

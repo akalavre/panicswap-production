@@ -3,6 +3,7 @@ import { poolMonitoringService } from '../services/PoolMonitoringService';
 import { createSimpleRugPullDetector } from './SimpleRugPullDetector';
 import { Connection } from '@solana/web3.js';
 import config from '../config';
+import { monitoringStatsService } from '../services/MonitoringStatsService';
 
 export interface AutoProtectionSettings {
   enabled: boolean;
@@ -211,14 +212,9 @@ export class SimpleAutoProtectionService {
         return;
       }
 
-      // Filter tokens worth protecting
-      const tokensToProtect = walletTokens.filter((token: any) => {
-        const price = token.token_prices && Array.isArray(token.token_prices) && token.token_prices.length > 0
-          ? token.token_prices[0].price
-          : 0;
-        const value = (token.balance * price) || 0;
-        return value > 50; // Only protect tokens worth >$50
-      });
+      // When auto-protect is enabled, protect ALL tokens (no value filter)
+      // This ensures all tokens show as protected in the UI
+      const tokensToProtect = walletTokens;
 
       console.log(`Protecting ${tokensToProtect.length} tokens for ${walletAddress}`);
 

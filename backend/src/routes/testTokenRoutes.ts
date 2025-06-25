@@ -8,6 +8,7 @@ import { pumpFunRugDetector } from '../services/PumpFunRugDetector';
 import { Connection } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
+import { safeParsePubkey, validatePublicKey } from '../utils/publicKeyUtils';
 import { helius } from '../utils/heliusClient';
 
 const router = Router();
@@ -66,7 +67,7 @@ router.post('/api/tokens/enrich-test', async (req: Request, res: Response) => {
         if (tokenMetadata.symbol === 'UNKNOWN' || !tokenMetadata.symbol) {
           const rpcUrl = process.env.HELIUS_RPC_URL || '';
           const connection = new Connection(rpcUrl);
-          const mintPubkey = new PublicKey(mint);
+          const mintPubkey = validatePublicKey(mint, 'mint address');
           const tokenInfo = await connection.getParsedAccountInfo(mintPubkey);
           
           if (tokenInfo.value && 'parsed' in tokenInfo.value.data) {
@@ -83,7 +84,7 @@ router.post('/api/tokens/enrich-test', async (req: Request, res: Response) => {
       try {
         const rpcUrl = process.env.HELIUS_RPC_URL || '';
         const connection = new Connection(rpcUrl);
-        const mintPubkey = new PublicKey(mint);
+        const mintPubkey = validatePublicKey(mint, 'mint address');
         const tokenInfo = await connection.getParsedAccountInfo(mintPubkey);
         
         if (tokenInfo.value && 'parsed' in tokenInfo.value.data) {

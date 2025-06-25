@@ -121,4 +121,49 @@ router.post('/sync/:walletAddress', async (req: Request, res: Response) => {
   }
 });
 
+// Bulk toggle protection for all tokens
+router.post('/bulk-toggle/:walletAddress', async (req: Request, res: Response) => {
+  try {
+    const { walletAddress } = req.params;
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled parameter must be boolean' });
+    }
+
+    let success = false;
+    let protectedCount = 0;
+
+    if (enabled) {
+      // Enable auto-protection (will protect all wallet tokens)
+      success = await simpleAutoProtectionService.enableAutoProtection(walletAddress);
+      if (success) {
+        const status = await simpleAutoProtectionService.getStatus(walletAddress);
+        protectedCount = status.protectedTokensCount || 0;
+      }
+    } else {
+      // Disable auto-protection (will unprotect all tokens)
+      success = await simpleAutoProtectionService.disableAutoProtection(walletAddress);
+    }
+
+    if (success) {
+      res.json({
+        success: true,
+        enabled,
+        protectedCount,
+        message: enabled 
+          ? `Auto-protection enabled. Protected ${protectedCount} tokens.`
+          : 'Auto-protection disabled. All tokens unprotected.'
+      });
+    } else {
+      res.status(500).json({ 
+        error: `Failed to ${enabled ? 'enable' : 'disable'} auto-protection` 
+      });
+    }
+  } catch (error) {
+    console.error('Error in bulk toggle:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

@@ -1,3 +1,7 @@
+<?php
+// Include the token display helper
+require_once __DIR__ . '/helpers/token-display.php';
+?>
 <!-- Token List Component -->
 <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
     <!-- Header -->
@@ -274,8 +278,13 @@ function renderTokenList() {
 
 // Helper to get token image URL
 function getTokenImageUrl(token) {
+    // For tokens with pending metadata, return null to trigger loading animation
+    if (token.metadata_status === 'pending') {
+        return null;
+    }
+    
     if (!token.image || token.image === '') {
-        return '/assets/images/token-placeholder.svg';
+        return null; // Will trigger loading animation
     }
     
     // If it's already a full URL, use it directly
@@ -292,6 +301,54 @@ function getTokenImageUrl(token) {
     return token.image;
 }
 
+// JavaScript version of token display helper
+function renderTokenDisplay(token) {
+    // Check if token has pending metadata
+    const isPending = token.metadata_status === 'pending';
+    
+    if (isPending) {
+        // Return loading state with gradient animation
+        return `
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-full token-loader"></div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-medium token-loading-text">Loading...</span>
+                    </div>
+                    <div class="text-xs text-gray-500">Fetching metadata</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Normal token display
+    const symbol = token.symbol || 'UNKNOWN';
+    const name = token.name || 'Unknown Token';
+    const imageUrl = getTokenImageUrl(token);
+    const platformBadge = token.platform ? getPlatformBadge(token.platform) : '';
+    const bundlerBadge = token.bundlerCount > 0 ? getBundlerBadge(token.bundlerCount) : '';
+    
+    return `
+        <div class="flex items-center space-x-3">
+            ${imageUrl ? 
+                `<img src="${imageUrl}" 
+                     alt="${symbol}" 
+                     class="w-8 h-8 rounded-full bg-gray-700 object-cover"
+                     onerror="this.onerror=null; this.classList.add('token-loader');">` :
+                `<div class="w-8 h-8 rounded-full token-loader"></div>`
+            }
+            <div>
+                <div class="flex items-center space-x-2">
+                    <span class="font-medium">${symbol}</span>
+                    ${platformBadge}
+                    ${bundlerBadge}
+                </div>
+                <div class="text-xs text-gray-500">${name}</div>
+            </div>
+        </div>
+    `;
+}
+
 // Render full token row
 function renderFullTokenRow(token) {
     const price = tokenListState.realtimePrices[token.mint]?.price || token.price;
@@ -304,20 +361,7 @@ function renderFullTokenRow(token) {
     return `
         <tr class="hover:bg-gray-800/50 transition-colors">
             <td class="px-6 py-4">
-                <div class="flex items-center space-x-3">
-                    <img src="${imageUrl}" 
-                         alt="${token.symbol}" 
-                         class="w-8 h-8 rounded-full bg-gray-700 object-cover"
-                         onerror="this.onerror=null; this.src='/assets/images/token-placeholder.svg';">
-                    <div>
-                        <div class="flex items-center space-x-2">
-                            <span class="font-medium">${token.symbol}</span>
-                            ${token.platform ? getPlatformBadge(token.platform) : ''}
-                            ${token.bundlerCount > 0 ? getBundlerBadge(token.bundlerCount) : ''}
-                        </div>
-                        <div class="text-xs text-gray-500">${token.name}</div>
-                    </div>
-                </div>
+                ${renderTokenDisplay(token)}
             </td>
             <td class="px-6 py-4 text-center">
                 ${getRiskScoreBadge(token.riskScore || 0)}
@@ -380,10 +424,13 @@ function renderCompactTokenRow(token) {
         <tr class="hover:bg-gray-800/50 transition-colors">
             <td class="px-6 py-4">
                 <div class="flex items-center space-x-3">
-                    <img src="${imageUrl}" 
-                         alt="${token.symbol}" 
-                         class="w-8 h-8 rounded-full bg-gray-700 object-cover"
-                         onerror="this.onerror=null; this.src='/assets/images/token-placeholder.svg';">
+                    ${imageUrl ? 
+                        `<img src="${imageUrl}" 
+                             alt="${token.symbol}" 
+                             class="w-8 h-8 rounded-full bg-gray-700 object-cover"
+                             onerror="this.onerror=null; this.classList.add('token-loader');">` :
+                        `<div class="w-8 h-8 rounded-full token-loader"></div>`
+                    }
                     <div>
                         <span class="font-medium">${token.symbol}</span>
                         <span class="text-xs text-gray-500 ml-2">${token.name}</span>
@@ -643,7 +690,7 @@ function toggleBalances() {
 function protectToken(mint) {
     showNotification('Opening protection modal...', 'info');
     // In production, this would open the protection modal
-    window.location.href = `protect.php?token=${mint}`;
+    window.location.href = `dashboard.php?token=${mint}`;
 }
 
 function openTokenSettings(mint) {
@@ -720,7 +767,11 @@ function updateStats() {
     ).length;
     
     document.getElementById('total-portfolio-value').textContent = formatNumber(totalValue);
-    document.getElementById('protected-count').textContent = protectedCount;
+    // Only update protected count if we have a list-specific element
+    const protectedCountList = document.getElementById('protected-count-list');
+    if (protectedCountList) {
+        protectedCountList.textContent = protectedCount;
+    }
     document.getElementById('hidden-count').textContent = tokenListState.hiddenTokens.size;
     document.getElementById('hidden-tokens-count').classList.toggle('hidden', tokenListState.hiddenTokens.size === 0);
 }

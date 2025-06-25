@@ -1,4 +1,21 @@
 <?php
+// Enable error reporting for debugging but send to error log, not output
+error_reporting(E_ALL);
+ini_set('display_errors', 0);  // Don't display errors in output
+ini_set('log_errors', 1);       // Log errors instead
+
+// Set up error handler to catch any errors and return JSON
+set_error_handler(function($severity, $message, $file, $line) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'PHP Error: ' . $message,
+        'file' => $file,
+        'line' => $line,
+        'severity' => $severity
+    ]);
+    exit;
+});
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -12,16 +29,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Only allow POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
+    echo json_encode(['error' => 'Method not allowed', 'method' => $_SERVER['REQUEST_METHOD']]);
     exit;
 }
 
 // Get request body
-$input = json_decode(file_get_contents('php://input'), true);
+$rawInput = file_get_contents('php://input');
+$input = json_decode($rawInput, true);
+
+if (json_last_error() !== JSON_ERROR_NONE) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid JSON: ' . json_last_error_msg(), 'rawInput' => $rawInput]);
+    exit;
+}
 
 if (!$input || !isset($input['tokenMint']) || !isset($input['walletAddress'])) {
     http_response_code(400);
-    echo json_encode(['error' => 'Missing required parameters: tokenMint and walletAddress']);
+    echo json_encode([
+        'error' => 'Missing required parameters: tokenMint and walletAddress',
+        'received' => $input,
+        'tokenMint' => $input['tokenMint'] ?? 'missing',
+        'walletAddress' => $input['walletAddress'] ?? 'missing'
+    ]);
     exit;
 }
 
@@ -29,18 +58,37 @@ $tokenMint = $input['tokenMint'];
 $walletAddress = $input['walletAddress'];
 
 // Include Supabase config
-require_once __DIR__ . '/../../config/supabase.php';
+try {
+    require_once __DIR__ . '/../../config/supabase.php';
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Failed to load Supabase config: ' . $e->getMessage(),
+        'file' => __FILE__,
+        'line' => __LINE__
+    ]);
+    exit;
+}
 
 try {
+    // Check if Supabase config is loaded
+    if (!defined('SUPABASE_URL') || !defined('SUPABASE_ANON_KEY')) {
+        throw new Exception('Supabase configuration not found');
+    }
+    
     // Initialize Supabase client
     $supabase = new \Supabase\CreateClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     // 1. Check if token metadata exists
-    $metadataResponse = $supabase->from('token_metadata')
-        ->select('*')
-        ->eq('mint', $tokenMint)
-        ->single()
-        ->execute();
+    try {
+        $metadataResponse = $supabase->from('token_metadata')
+            ->select('*')
+            ->eq('mint', $tokenMint)
+            ->single()
+            ->execute();
+    } catch (Exception $e) {
+        throw new Exception('Failed to query token_metadata: ' . $e->getMessage());
+    }
     
     $tokenMetadata = null;
     
@@ -178,5 +226,12 @@ try {
     
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Failed to add demo token: ' . $e->getMessage()]);
+    echo json_encode([
+        'error' => 'Failed to add demo token: ' . $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'tokenMint' => $tokenMint ?? 'unknown',
+        'walletAddress' => $walletAddress ?? 'unknown'
+    ]);
 }

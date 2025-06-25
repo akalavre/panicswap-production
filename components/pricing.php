@@ -77,14 +77,14 @@
                         <p class="text-gray-400 text-sm mb-4">For serious DeFi traders</p>
                         <div class="mb-2">
                             <div class="flex items-baseline">
-                                <span class="text-4xl font-bold">$40.26</span>
+                                <span class="text-4xl font-bold">$19.75</span>
                                 <span class="text-gray-400 ml-2 text-sm">/week</span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $161.04</p>
+                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $79</p>
                         </div>
                         <div class="flex items-center space-x-2 mb-2">
                             <span class="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">Save 10%</span>
-                            <span class="text-xs text-gray-400">Pay 0.248 SOL/week</span>
+                            <span class="text-xs text-gray-400">Pay 0.141 SOL/week</span>
                         </div>
                         <p class="text-orange-400 text-xs font-semibold">⚡ Only 47 spots left</p>
                     </div>
@@ -125,8 +125,8 @@
                         </ul>
                     </div>
                     
-                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold transition-all shadow-lg" onclick="openPaymentModal('pro', 0.99, 161.04)">
-                        Get Pro - $40.26/week
+                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold transition-all shadow-lg" onclick="openPaymentModal('pro', 0.56, 79)">
+                        Get Pro - $19.75/week
                     </button>
                 </div>
             </div>
@@ -146,14 +146,14 @@
                         <p class="text-gray-400 text-sm mb-4">For memecoin launchpad traders</p>
                         <div class="mb-2">
                             <div class="flex items-baseline">
-                                <span class="text-4xl font-bold">$80.91</span>
+                                <span class="text-4xl font-bold">$37.25</span>
                                 <span class="text-gray-400 ml-2 text-sm">/week</span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $323.63</p>
+                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $149</p>
                         </div>
                         <div class="flex items-center space-x-2 mb-2">
                             <span class="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">Save 10%</span>
-                            <span class="text-xs text-gray-400">Pay 0.498 SOL/week</span>
+                            <span class="text-xs text-gray-400">Pay 0.266 SOL/week</span>
                         </div>
                         <p class="text-green-400 text-xs font-semibold">⚡ Protects new token launches</p>
                     </div>
@@ -194,8 +194,8 @@
                         </ul>
                     </div>
                     
-                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-semibold transition-all" onclick="openPaymentModal('degen', 1.99, 323.63)">
-                        Get Degen Mode - $80.91/week
+                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-semibold transition-all" onclick="openPaymentModal('degen', 1.06, 149)">
+                        Get Degen Mode - $37.25/week
                     </button>
                 </div>
             </div>
@@ -208,14 +208,14 @@
                         <p class="text-gray-400 text-sm mb-4">All tokens, all platforms</p>
                         <div class="mb-2">
                             <div class="flex items-baseline">
-                                <span class="text-4xl font-bold">$121.53</span>
+                                <span class="text-4xl font-bold">$99.75</span>
                                 <span class="text-gray-400 ml-2 text-sm">/week</span>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $486.12</p>
+                            <p class="text-xs text-gray-500 mt-1">Billed monthly at $399</p>
                         </div>
                         <div class="flex items-center space-x-2 mb-2">
                             <span class="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">Save 10%</span>
-                            <span class="text-xs text-gray-400">Pay 0.748 SOL/week</span>
+                            <span class="text-xs text-gray-400">Pay 0.713 SOL/week</span>
                         </div>
                     </div>
                     
@@ -255,8 +255,8 @@
                         </ul>
                     </div>
                     
-                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-semibold transition-all" onclick="openPaymentModal('enterprise', 2.99, 486.12)">
-                        Get Enterprise - $121.53/week
+                    <button class="w-full mt-8 py-3 px-6 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-semibold transition-all" onclick="openPaymentModal('enterprise', 2.85, 399)">
+                        Get Enterprise - $99.75/week
                     </button>
                 </div>
             </div>
@@ -460,8 +460,8 @@
         <!-- Bottom CTA -->
         <div class="text-center mt-16" data-aos="fade-up">
             <div class="mb-8">
-                <button class="btn btn-primary text-lg px-8 py-4" onclick="openPaymentModal('pro', 0.99, 161.04)">
-                    Get Started - From $40.26/week
+                <button class="btn btn-primary text-lg px-8 py-4" onclick="openPaymentModal('pro', 0.56, 79)">
+                    Get Started - From $19.75/week
                 </button>
                 <p class="text-sm text-gray-400 mt-4">
                     Streaming subscription • Cancel anytime • Get unused SOL back

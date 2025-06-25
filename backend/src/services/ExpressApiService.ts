@@ -1,7 +1,9 @@
 import express, { Request, Response } from 'express';
 import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import { PublicKey } from '@solana/web3.js';
+import { safeParsePubkey, validatePublicKey } from '../utils/publicKeyUtils';
 import supabase from '../utils/supabaseClient';
 import protectionRoutes from '../protect/protectionRoutes';
 import autoProtectionRoutes from '../protect/autoProtectionRoutes';
@@ -9,16 +11,21 @@ import poolProtectionRoutes from '../routes/poolProtectionRoutes';
 // import tokenDiscoveryRoutes from '../routes/tokenDiscoveryRoutes'; // REMOVED: Using wallet-first discovery
 import protectedTokensRoutes from '../routes/protectedTokensRoutes';
 import protectionAliasRoutes from '../routes/protectionAliasRoutes';
+import statsRoutes from '../routes/statsRoutes';
+import monitoringRoutes from '../routes/monitoringRoutes';
+import holderRoutes from '../routes/holderRoutes';
 import testTokenRoutes from '../routes/testTokenRoutes';
 import dashboardTokensRoutes from '../routes/dashboardTokensRoutes';
 import { poolMonitoringService } from './PoolMonitoringService';
 import { moralisService } from './MoralisService';
 import { pumpFunService } from './PumpFunService';
 import { rugCheckPollingService } from './RugCheckPollingService';
+import { getRedisHealth } from '../utils/upstashClient';
 
 export class ExpressApiService {
   private app: express.Application;
   private server: ReturnType<typeof createServer> | null = null;
+  private io: SocketIOServer | null = null;
   private port: number;
   // private enrichmentService: any; // REMOVED: No longer needed with Helius token discovery
   private webhookService: any;
@@ -73,13 +80,21 @@ export class ExpressApiService {
     });
 
     // Enhanced health check
-    this.app.get('/api/enhanced/health', (req: Request, res: Response) => {
+    this.app.get('/api/enhanced/health', async (req: Request, res: Response) => {
+      const redisHealth = await getRedisHealth();
+      
       res.json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(), 
         service: 'panicswap-enhanced',
         protectionActive: true,
-        monitoringActive: true
+        monitoringActive: true,
+        redis: {
+          enabled: redisHealth.enabled,
+          connected: redisHealth.connected,
+          status: redisHealth.status,
+          fallbackCount: redisHealth.metrics.fallbackCount
+        }
       });
     });
 
@@ -262,6 +277,72 @@ export class ExpressApiService {
       } catch (error) {
         console.error('Error fetching batch prices:', error);
         res.status(500).json({ error: 'Failed to fetch prices' });
+      }
+    });
+
+    // Risk details endpoint
+    this.app.get('/api/risk-details/:mint', async (req: Request, res: Response) => {
+      try {
+        const { mint } = req.params;
+        
+        if (!mint) {
+          return res.status(400).json({ error: 'Token mint required' });
+        }
+
+        // Get comprehensive risk data from rugcheck_reports
+        const { data: rugcheckData, error: rugcheckError } = await supabase
+          .from('rugcheck_reports')
+          .select('*')
+          .eq('token_mint', mint)
+          .single();
+
+        if (rugcheckError && rugcheckError.code !== 'PGRST116') {
+          throw rugcheckError;
+        }
+
+        // Get protection status if available
+        const { data: protectionData, error: protectionError } = await supabase
+          .from('protected_tokens')
+          .select('monitoring_enabled, monitoring_active, created_at')
+          .eq('token_mint', mint)
+          .limit(1);
+
+        const riskDetails = {
+          token_mint: mint,
+          risk_score: rugcheckData?.risk_score || 0,
+          risk_level: rugcheckData?.risk_level || 'UNKNOWN',
+          holder_count: rugcheckData?.holders || 0,
+          creator_balance_percent: rugcheckData?.creator_balance_percent || 0,
+          lp_locked: rugcheckData?.lp_locked || 0,
+          honeypot_status: rugcheckData?.honeypot_status || 'unknown',
+          dev_activity_pct_total: rugcheckData?.dev_activity_pct_total || 0,
+          dev_activity_24h_pct: rugcheckData?.dev_activity_24h_pct || 0,
+          dev_activity_1h_pct: rugcheckData?.dev_activity_1h_pct || 0,
+          last_dev_tx: rugcheckData?.last_dev_tx || null,
+          liquidity_current: rugcheckData?.liquidity_current || 0,
+          liquidity_change_1h_pct: rugcheckData?.liquidity_change_1h_pct || 0,
+          liquidity_change_24h_pct: rugcheckData?.liquidity_change_24h_pct || 0,
+          warnings: rugcheckData?.warnings || [],
+          mint_authority_active: rugcheckData?.mint_authority || false,
+          freeze_authority_active: rugcheckData?.freeze_authority || false,
+          bundler_count: rugcheckData?.bundler_count || 0,
+          launch_time: rugcheckData?.launch_time || null,
+          last_checked: rugcheckData?.last_checked || null,
+          protection_status: {
+            is_protected: protectionData && protectionData.length > 0 && protectionData[0].monitoring_enabled,
+            monitoring_active: protectionData && protectionData.length > 0 && protectionData[0].monitoring_active,
+            protected_since: protectionData && protectionData.length > 0 ? protectionData[0].created_at : null
+          },
+          auto_sell_enabled: rugcheckData?.risk_level === 'CRITICAL' && protectionData && protectionData.length > 0 && protectionData[0].monitoring_enabled
+        };
+
+        res.json({
+          success: true,
+          data: riskDetails
+        });
+      } catch (error) {
+        console.error('Error fetching risk details:', error);
+        res.status(500).json({ error: 'Failed to fetch risk details' });
       }
     });
 
@@ -476,6 +557,41 @@ export class ExpressApiService {
       }
     });
 
+    // Token data population endpoint
+    this.app.post('/api/tokens/populate-data', async (req: Request, res: Response) => {
+      try {
+        const { tokenMint, walletAddress } = req.body;
+        
+        if (!tokenMint || !walletAddress) {
+          return res.status(400).json({ error: 'Token mint and wallet address required' });
+        }
+
+        console.log(`[API] Triggering comprehensive data population for ${tokenMint}`);
+        
+        // Import and use TokenDataPopulator
+        const { tokenDataPopulator } = await import('./TokenDataPopulator');
+        
+        // Run population asynchronously (don't await)
+        tokenDataPopulator.populateTokenData(tokenMint, walletAddress)
+          .then(() => {
+            console.log(`[API] Data population completed for ${tokenMint}`);
+          })
+          .catch(error => {
+            console.error(`[API] Data population failed for ${tokenMint}:`, error);
+          });
+
+        res.json({ 
+          success: true, 
+          message: 'Data population started',
+          tokenMint,
+          walletAddress
+        });
+      } catch (error) {
+        console.error('Error starting data population:', error);
+        res.status(500).json({ error: 'Failed to start data population' });
+      }
+    });
+
     // Wallet sync endpoint (without 's')
     this.app.post('/api/wallet/sync', async (req: Request, res: Response) => {
       try {
@@ -652,6 +768,7 @@ export class ExpressApiService {
           .single();
 
         let tokenMetadata;
+        let tokenInfo: any = null;
         
         if (existingToken && existingToken.symbol !== 'UNKNOWN' && existingToken.symbol !== 'TEST') {
           // Token already exists with real metadata, use it
@@ -660,7 +777,6 @@ export class ExpressApiService {
         } else {
           // Token doesn't exist or has placeholder data, fetch from Moralis first, then Helius as fallback
           console.log(`[Test] Fetching token metadata...`);
-          let tokenInfo = null;
           
           // Try Moralis first
           const moralisData = await moralisService.getTokenMetadata(tokenMint);
@@ -689,6 +805,13 @@ export class ExpressApiService {
                     decimals: 9, // Default for SPL tokens
                     logo: asset.content.files?.[0]?.uri || asset.content.json_uri
                   };
+                  
+                  // Extract price from Helius response
+                  if (asset?.token_info?.price_info?.price_per_token) {
+                    tokenInfo.price = asset.token_info.price_info.price_per_token;
+                    console.log(`✅ Token price from Helius: $${tokenInfo.price}`);
+                  }
+                  
                   console.log(`✅ Token metadata fetched from Helius:`, tokenInfo);
                 }
               } catch (heliusError) {
@@ -729,13 +852,17 @@ export class ExpressApiService {
         }
 
         // 2. Add token to wallet_tokens table with test balance
-        const testBalance = 1000000; // 1 million tokens for testing
+        const testTokenAmount = 1000000; // 1 million tokens for display
+        const tokenDecimals = tokenMetadata?.decimals || 9; // Use token decimals or default to 9
+        const testBalance = testTokenAmount * Math.pow(10, tokenDecimals); // Raw balance
+        
         const { error: walletTokenError } = await supabase
           .from('wallet_tokens')
           .upsert({
             wallet_address: walletAddress,
             token_mint: tokenMint,
             balance: testBalance,
+            decimals: tokenDecimals,
             is_test_token: true,
             last_seen_at: new Date().toISOString(),
             added_at: new Date().toISOString()
@@ -745,29 +872,79 @@ export class ExpressApiService {
 
         if (walletTokenError) {
           console.error('[Test] Error adding token to wallet:', walletTokenError);
-          return res.status(500).json({ error: 'Failed to add token to wallet' });
+          return res.status(500).json({ 
+            error: 'Failed to add token to wallet',
+            details: walletTokenError.message || walletTokenError
+          });
         }
 
-        // 3. Create test price data
+        // 3. Fetch real price data using PriceDiscoveryService
+        console.log(`[Test] Fetching real price for token ${tokenMint}...`);
+        let realPrice = 0;
+        let liquidity = null;
+        let marketCap = null;
+        let tokenAge = null;
+        
+        try {
+          const { priceDiscoveryService } = await import('./PriceDiscoveryService');
+          const { rugCheckPollingServiceV2 } = await import('./RugCheckPollingServiceV2');
+          
+          // Use Helius price if available, otherwise fetch from PriceDiscoveryService
+          if (tokenInfo?.price && tokenInfo.price > 0) {
+            realPrice = tokenInfo.price;
+            console.log(`[Test] Using Helius price for ${tokenMint}: $${realPrice}`);
+          } else {
+            // Get real price from other sources
+            realPrice = await priceDiscoveryService.getTokenPrice(tokenMint);
+            console.log(`[Test] Found price for ${tokenMint}: $${realPrice}`);
+          }
+          
+          // Get liquidity if price was found
+          if (realPrice > 0) {
+            liquidity = await priceDiscoveryService.getTokenLiquidity(tokenMint);
+            
+            // Get market cap
+            const { marketCap: mc } = await priceDiscoveryService.getTokenSupplyAndMarketCap(tokenMint, realPrice);
+            marketCap = mc;
+          }
+          
+          // Get token age (launch time)
+          try {
+            console.log(`[Test] Fetching token age for ${tokenMint}...`);
+            const launchTime = await rugCheckPollingServiceV2.getTokenLaunchTime(tokenMint);
+            tokenAge = launchTime;
+            console.log(`[Test] Token age: ${tokenAge || 'Unknown'}`);
+          } catch (ageError) {
+            console.error('[Test] Error fetching token age:', ageError);
+          }
+        } catch (priceError) {
+          console.error('[Test] Error fetching real price:', priceError);
+        }
+        
+        // Save price data (use real price if found, otherwise use a small test price)
+        const priceData = {
+          token_mint: tokenMint,
+          price: realPrice > 0 ? realPrice : 0.00001, // Use real price or very small test price
+          price_usd: realPrice > 0 ? realPrice : 0.00001,
+          liquidity: liquidity || 1000, // Real liquidity or $1k test
+          market_cap: marketCap || 10000, // Real market cap or $10k test
+          volume_24h: 0, // Will be populated later
+          price_change_24h: 0,
+          platform: tokenMetadata.platform || 'unknown',
+          updated_at: new Date().toISOString()
+        };
+        
         const { error: priceError } = await supabase
           .from('token_prices')
-          .upsert({
-            token_mint: tokenMint,
-            price: 0.001, // Test price
-            price_usd: 0.001,
-            liquidity: 50000, // $50k test liquidity
-            market_cap: 1000000, // $1M test market cap
-            volume_24h: 10000, // $10k test volume
-            price_change_24h: 0,
-            platform: 'test',
-            updated_at: new Date().toISOString()
-          }, {
+          .upsert(priceData, {
             onConflict: 'token_mint'
           });
 
         if (priceError) {
-          console.error('[Test] Error creating price data:', priceError);
+          console.error('[Test] Error saving price data:', priceError);
           // Don't fail the request, price data is optional
+        } else {
+          console.log(`[Test] Saved price data for ${tokenMint}: $${priceData.price}`);
         }
 
         // 4. Add to protected_tokens with automatic protection enabled
@@ -798,9 +975,22 @@ export class ExpressApiService {
 
         // 5. Price polling service removed - prices now updated on-demand
 
-        // 5a. Trigger immediate RugCheck update
+        // 5a. Trigger immediate RugCheck update and save launch time
         await rugCheckPollingService.updateTokensImmediately([tokenMint]);
         console.log(`[Test] Triggered immediate RugCheck update for ${tokenMint}`);
+        
+        // Save launch time in rugcheck_reports if we found it
+        if (tokenAge) {
+          await supabase
+            .from('rugcheck_reports')
+            .upsert({
+              token_mint: tokenMint,
+              launch_time: tokenAge,
+              last_update: new Date().toISOString()
+            }, {
+              onConflict: 'token_mint'
+            });
+        }
 
         // 6. Start pool monitoring for the token
         try {
@@ -820,10 +1010,16 @@ export class ExpressApiService {
             tokenMint,
             walletAddress,
             balance: testBalance,
+            display_balance: testTokenAmount,
             symbol: tokenMetadata.symbol,
             name: tokenMetadata.name,
-            decimals: tokenMetadata.decimals,
+            decimals: tokenDecimals,
             logo: tokenMetadata.logo_uri,
+            price: priceData.price,
+            liquidity: priceData.liquidity,
+            marketCap: priceData.market_cap,
+            platform: priceData.platform,
+            launchTime: tokenAge,
             protectionSettings: protectedData
           }
         });
@@ -854,9 +1050,8 @@ export class ExpressApiService {
         
         for (const mint of tokenMints) {
           // Validate mint address format
-          try {
-            new PublicKey(mint); // Test if valid
-          } catch (e) {
+          const validPubkey = safeParsePubkey(mint);
+          if (!validPubkey) {
             console.error(`[RugCheck] Invalid mint address format: ${mint}`);
             // Skip invalid mints
             reports[mint] = {
@@ -1073,6 +1268,66 @@ export class ExpressApiService {
     });
 
     // Get wallet tokens endpoint
+    // Support both URL patterns
+    this.app.get('/api/wallet/:address/tokens', async (req: Request, res: Response) => {
+      try {
+        const walletAddress = req.params.address;
+        
+        if (!walletAddress) {
+          return res.status(400).json({ error: 'Wallet address is required' });
+        }
+
+        // Get wallet-specific tokens from wallet_tokens table
+        const { data: walletTokens, error: walletError } = await supabase
+          .from('wallet_tokens')
+          .select(`
+            *,
+            token_metadata!inner(*)
+          `)
+          .eq('wallet_address', walletAddress)
+          .order('last_seen_at', { ascending: false });
+
+        if (walletError) {
+          throw walletError;
+        }
+
+        // Get token prices
+        const tokenMints = walletTokens?.map(t => t.token_mint) || [];
+        const { data: prices, error: priceError } = await supabase
+          .from('token_prices')
+          .select('*')
+          .in('token_mint', tokenMints);
+
+        if (priceError) {
+          console.error('Error fetching prices:', priceError);
+        }
+
+        // Create price map
+        const priceMap = new Map((prices || []).map(p => [p.token_mint, p]));
+
+        // Combine data
+        const tokens = walletTokens?.map(token => ({
+          ...token,
+          ...token.token_metadata,
+          price: priceMap.get(token.token_mint)?.price || 0,
+          price_change_24h: priceMap.get(token.token_mint)?.price_change_24h || 0,
+          liquidity_usd: priceMap.get(token.token_mint)?.liquidity_usd || 0,
+          volume_24h: priceMap.get(token.token_mint)?.volume_24h || 0,
+          value: (token.balance || 0) * (priceMap.get(token.token_mint)?.price || 0)
+        })) || [];
+
+        res.json({
+          success: true,
+          count: tokens.length,
+          tokens: tokens
+        });
+      } catch (error) {
+        console.error('Error fetching wallet tokens:', error);
+        res.status(500).json({ error: 'Failed to fetch wallet tokens' });
+      }
+    });
+    
+    // Keep old route for backward compatibility
     this.app.get('/api/wallet/tokens/:address', async (req: Request, res: Response) => {
       try {
         const walletAddress = req.params.address;
@@ -1208,15 +1463,114 @@ export class ExpressApiService {
     // Dashboard token routes - for tracking active dashboard tokens
     this.app.use(dashboardTokensRoutes);
     
+    // Stats routes
+    this.app.use('/api/stats', statsRoutes);
+    
+    // Monitoring routes
+    this.app.use('/api/monitoring', monitoringRoutes);
+    
+    // Cached monitoring routes (includes monitoring-status endpoint)
+    const cachedMonitoringRoutes = require('../routes/cachedMonitoringRoutes').default;
+    this.app.use('/api', cachedMonitoringRoutes);
+    
+    // Monitoring debug endpoint
+    this.app.get('/api/monitoring/debug/:tokenMint', async (req: Request, res: Response) => {
+      try {
+        const { tokenMint } = req.params;
+        const walletAddress = req.query.wallet || req.headers['x-wallet-address'];
+        
+        if (!tokenMint || !walletAddress) {
+          return res.status(400).json({ error: 'Token mint and wallet address are required' });
+        }
+        
+        // Get protection status
+        const { data: protectionData } = await supabase
+          .from('protected_tokens')
+          .select('*')
+          .eq('token_mint', tokenMint)
+          .eq('wallet_address', walletAddress)
+          .single();
+        
+        // Get monitoring stats
+        const { data: monitoringStats } = await supabase
+          .from('monitoring_stats')
+          .select('*')
+          .eq('token_mint', tokenMint)
+          .eq('wallet_address', walletAddress)
+          .single();
+        
+        // Get velocity data
+        const { liquidityVelocityTracker } = await import('./LiquidityVelocityTracker');
+        const velocityData = await liquidityVelocityTracker.getVelocityData(tokenMint);
+        
+        // Get pattern analysis
+        const { rugPatternDetector } = await import('./RugPatternDetector');
+        const patternAnalysis = rugPatternDetector.getAnalysis(tokenMint);
+        
+        // Build response
+        const response = {
+          tokenMint,
+          walletAddress,
+          monitoring: {
+            active: protectionData?.is_active || false,
+            mempoolEnabled: protectionData?.mempool_monitoring || false,
+            riskThreshold: protectionData?.risk_threshold || 'HIGH',
+            activeMonitors: monitoringStats?.active_monitors || 0,
+            websocketConnected: monitoringStats?.websocket_connected || false,
+            lastCheck: monitoringStats?.last_check_at || new Date().toISOString()
+          },
+          liquidity: {
+            current: velocityData?.current?.liquidityUSD || 0,
+            change1m: velocityData?.velocities?.liquidity1m || 0,
+            change5m: velocityData?.velocities?.liquidity5m || 0,
+            change30m: velocityData?.velocities?.liquidity30m || 0
+          },
+          price: {
+            change1m: velocityData?.velocities?.price1m || 0,
+            change5m: velocityData?.velocities?.price5m || 0
+          },
+          alerts: {
+            flashRug: velocityData?.alerts?.flashRug || false,
+            rapidDrain: velocityData?.alerts?.rapidDrain || false,
+            slowBleed: velocityData?.alerts?.slowBleed || false,
+            volumeSpike: velocityData?.alerts?.volumeSpike || false
+          },
+          patterns: {
+            active: patternAnalysis?.patterns || [],
+            highestRisk: this.getHighestRiskPattern(patternAnalysis),
+            confidence: this.getHighestConfidence(patternAnalysis),
+            timeToRug: this.getShortestTimeToRug(patternAnalysis)
+          },
+          stats: {
+            alertsCount: monitoringStats?.alerts_count || 0,
+            triggerCount: monitoringStats?.trigger_count || 0,
+            lastThreat: monitoringStats?.last_threat || null
+          },
+          lastUpdate: new Date().toISOString()
+        };
+        
+        res.json(response);
+      } catch (error) {
+        console.error('[Monitoring Debug] Error:', error);
+        res.status(500).json({ 
+          error: 'Failed to fetch monitoring debug data',
+          message: (error as Error).message 
+        });
+      }
+    });
+    
+    // Holder routes
+    this.app.use('/api/holders', holderRoutes);
+    
+    // ML prediction and pattern routes
+    
     // Debug endpoint for rugcheck data
     this.app.get('/api/v1/debug/rugcheck/:mint', async (req: Request, res: Response) => {
       try {
         const { mint } = req.params;
         
         // Validate mint address
-        try {
-          new PublicKey(mint);
-        } catch {
+        if (!safeParsePubkey(mint)) {
           return res.status(400).json({ error: 'Invalid mint address' });
         }
         
@@ -1305,8 +1659,48 @@ export class ExpressApiService {
   async start() {
     return new Promise<void>((resolve) => {
       this.server = createServer(this.app);
+      
+      // Initialize Socket.io
+      this.io = new SocketIOServer(this.server, {
+        cors: {
+          origin: function(origin, callback) {
+            // Allow requests with no origin
+            if (!origin) return callback(null, true);
+            
+            // Allow localhost on any port
+            if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+              return callback(null, true);
+            }
+            
+            callback(new Error('Not allowed by CORS'));
+          },
+          credentials: true
+        }
+      });
+      
+      // Socket.io connection handler
+      this.io.on('connection', (socket) => {
+        console.log('Client connected:', socket.id);
+        
+        socket.on('disconnect', () => {
+          console.log('Client disconnected:', socket.id);
+        });
+        
+        // Handle token price updates
+        socket.on('subscribe-token-prices', (tokenMints: string[]) => {
+          console.log('Client subscribing to token prices:', tokenMints);
+          socket.join('token-prices');
+        });
+        
+        // Handle wallet monitoring
+        socket.on('subscribe-wallet', (walletAddress: string) => {
+          console.log('Client subscribing to wallet:', walletAddress);
+          socket.join(`wallet-${walletAddress}`);
+        });
+      });
+      
       this.server.listen(this.port, () => {
-        console.log(`Express API server running on port ${this.port}`);
+        console.log(`Express API server with WebSocket support running on port ${this.port}`);
         resolve();
       });
     });
@@ -1317,5 +1711,43 @@ export class ExpressApiService {
       this.server.close();
       console.log('Express API server stopped');
     }
+  }
+
+  /**
+   * Get the highest risk pattern type
+   */
+  private getHighestRiskPattern(analysis: any): string | null {
+    if (!analysis?.patterns || analysis.patterns.length === 0) return null;
+    
+    // Sort by severity and confidence
+    const sorted = [...analysis.patterns].sort((a: any, b: any) => {
+      const severityScore: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+      const aScore = (severityScore[a.severity] || 0) * a.confidence;
+      const bScore = (severityScore[b.severity] || 0) * b.confidence;
+      return bScore - aScore;
+    });
+    
+    return sorted[0].type;
+  }
+
+  /**
+   * Get highest confidence from patterns
+   */
+  private getHighestConfidence(analysis: any): number {
+    if (!analysis?.patterns || analysis.patterns.length === 0) return 0;
+    return Math.max(...analysis.patterns.map((p: any) => p.confidence));
+  }
+
+  /**
+   * Get shortest estimated time to rug
+   */
+  private getShortestTimeToRug(analysis: any): number | null {
+    if (!analysis?.patterns || analysis.patterns.length === 0) return null;
+    
+    const times = analysis.patterns
+      .map((p: any) => p.estimatedTimeToRug)
+      .filter((t: any) => t !== null && t !== undefined);
+        
+    return times.length > 0 ? Math.min(...times) : null;
   }
 }

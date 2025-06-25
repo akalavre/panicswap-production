@@ -6,6 +6,7 @@ import config from '../config';
 import { rpcCall } from '../utils/rpcGate';
 import supabase from '../utils/supabaseClient';
 import { pumpFunService } from './PumpFunService';
+import { getJupiterPriceUrl, getJupiterFetchOptions, JupiterPriceResponse } from '../utils/jupiterEndpoints';
 
 interface PriceCache {
   price: number;
@@ -26,7 +27,6 @@ interface SwapInfo {
 export class PriceDiscoveryService {
   private priceCache: Map<string, PriceCache> = new Map();
   private CACHE_DURATION_MS = 30000; // 30 seconds (increased from 5 seconds)
-  private jupiterApiUrl = 'https://price.jup.ag/v6/price';
   private connection: Connection;
   private raydiumClient: Raydium | null = null;
   private supplyCache: Map<string, { supply: number; timestamp: number }> = new Map();
@@ -36,7 +36,13 @@ export class PriceDiscoveryService {
 
   constructor() {
     console.log('PriceDiscoveryService initialized');
-    this.connection = new Connection(config.heliusRpcUrl || 'https://api.mainnet-beta.solana.com');
+    // Use Helius RPC with proper authentication
+    const rpcUrl = config.heliusRpcUrl || process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    console.log(`[PriceDiscovery] Using RPC URL: ${rpcUrl.includes('helius') ? 'Helius RPC' : 'Default RPC'}`);
+    this.connection = new Connection(rpcUrl, {
+      commitment: 'confirmed',
+      wsEndpoint: rpcUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+    });
     this.initializeRaydium();
   }
 
@@ -121,6 +127,12 @@ export class PriceDiscoveryService {
    */
   private async getPriceFromHeliusSwaps(mint: string): Promise<number> {
     try {
+      // Skip if no API key configured
+      if (!config.heliusApiKey) {
+        console.log('[PriceDiscovery] Helius API key not configured, skipping swap price check');
+        return 0;
+      }
+
       // Rate limiting for Helius
       const now = Date.now();
       if (now - this.lastHeliusCall < this.heliusRateLimit) {
@@ -128,69 +140,55 @@ export class PriceDiscoveryService {
       }
       this.lastHeliusCall = now;
 
-      // Get recent transactions using Helius HTTP API
-      const response = await axios.post(
-        `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
-        {
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getSignaturesForAddress',
-          params: [
-            mint,
-            {
-              limit: 10, // Get last 10 transactions
-              commitment: 'confirmed'
-            }
-          ]
-        },
-        {
-          timeout: 5000,
-          headers: { 'Content-Type': 'application/json' }
-        }
+      // Use the connection object which already has Helius RPC configured
+      const signatures = await this.connection.getSignaturesForAddress(
+        new PublicKey(mint),
+        { limit: 10 }
       );
 
-      if (!response.data?.result || response.data.result.length === 0) {
+      if (!signatures || signatures.length === 0) {
+        console.log(`[PriceDiscovery] No transactions found for ${mint}`);
         return 0;
       }
 
-      // Get transaction details for the signatures
-      const signatures = response.data.result.map((tx: any) => tx.signature).slice(0, 5); // Limit to 5 for rate limiting
+      // Get transaction details for the signatures (limit to 5 for rate limiting)
+      const sigStrings = signatures.slice(0, 5).map(sig => sig.signature);
       
-      // Fetch transactions in batch
-      const txResponse = await axios.post(
-        `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
-        signatures.map((sig: string, index: number) => ({
-          jsonrpc: '2.0',
-          id: index,
-          method: 'getTransaction',
-          params: [sig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }]
-        })),
-        {
-          timeout: 10000,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-
-      // Parse transactions to find swaps
-      const transactions = Array.isArray(txResponse.data) ? txResponse.data : [txResponse.data];
-      
-      for (const txData of transactions) {
-        if (!txData?.result) continue;
-        
-        const price = await this.extractPriceFromTransaction(txData.result, mint);
-        if (price > 0) {
-          console.log(`Found price for ${mint} from recent transaction: $${price.toFixed(8)}`);
-          return price;
+      for (const sig of sigStrings) {
+        try {
+          const tx = await this.connection.getTransaction(sig, {
+            maxSupportedTransactionVersion: 0,
+            commitment: 'confirmed'
+          });
+          
+          if (!tx) continue;
+          
+          const price = await this.extractPriceFromTransaction(tx, mint);
+          if (price > 0) {
+            console.log(`Found price for ${mint} from recent transaction: $${price.toFixed(8)}`);
+            return price;
+          }
+        } catch (txError: any) {
+          console.log(`[PriceDiscovery] Error fetching transaction ${sig}:`, txError.message);
+          continue;
         }
       }
 
       return 0;
     } catch (error: any) {
-      if (error.response?.status === 429) {
-        console.error('Helius rate limit hit, increasing delay');
+      if (error.toString().includes('429') || error.toString().includes('rate')) {
+        console.error('[PriceDiscovery] Helius rate limit hit, increasing delay');
         this.heliusRateLimit = Math.min(this.heliusRateLimit * 2, 5000);
+      } else if (error.toString().includes('401') || error.toString().includes('unauthorized')) {
+        console.error('[PriceDiscovery] Helius authentication error - check API key configuration');
+        console.error('Current RPC URL:', config.heliusRpcUrl?.replace(/api-key=.*/, 'api-key=***'));
+        // Try fallback RPC
+        if (config.heliusRpcUrl && config.heliusRpcUrl.includes('helius')) {
+          console.log('[PriceDiscovery] Switching to fallback Alchemy RPC');
+          this.connection = new Connection(process.env.ALCHEMY_RPC_URL || 'https://api.mainnet-beta.solana.com');
+        }
       } else {
-        console.error(`Error getting Helius swap price for ${mint}:`, error.message);
+        console.error(`[PriceDiscovery] Error getting Helius swap price for ${mint}:`, error.message);
       }
       return 0;
     }
@@ -473,15 +471,16 @@ export class PriceDiscoveryService {
 
     try {
       // Try to get SOL price from Jupiter
-      const response = await axios.get(this.jupiterApiUrl, {
-        params: { 
-          ids: 'So11111111111111111111111111111111111111112',
-          showExtraInfo: false
-        },
-        timeout: 5000,
-        headers: {
-          'Accept': 'application/json'
-        }
+      const solMint = 'So11111111111111111111111111111111111111112';
+      const priceUrl = getJupiterPriceUrl(solMint);
+      const fetchOptions = getJupiterFetchOptions({
+        timeout: 10000, // 10 seconds
+        maxRetries: 3
+      });
+      
+      const response = await axios.get(priceUrl, {
+        ...fetchOptions,
+        params: { showExtraInfo: false }
       });
 
       if (response.data?.data?.['So11111111111111111111111111111111111111112']) {
@@ -568,15 +567,15 @@ export class PriceDiscoveryService {
       
       this.lastJupiterCall = now;
       
-      const response = await axios.get(this.jupiterApiUrl, {
-        params: { 
-          ids: mint,
-          showExtraInfo: false
-        },
-        timeout: 5000, // 5 second timeout
-        headers: {
-          'Accept': 'application/json'
-        }
+      const priceUrl = getJupiterPriceUrl(mint);
+      const fetchOptions = getJupiterFetchOptions({
+        timeout: 10000, // 10 seconds
+        maxRetries: 3
+      });
+      
+      const response = await axios.get(priceUrl, {
+        ...fetchOptions,
+        params: { showExtraInfo: false }
       });
 
       if (response.data?.data?.[mint]) {
@@ -823,8 +822,13 @@ export class PriceDiscoveryService {
    */
   private async getLiquidityFromPumpFun(mint: string): Promise<number | null> {
     try {
-      // For pump.fun, we need to get the bonding curve data
-      // The liquidity is the SOL in the bonding curve
+      // First try the RapidAPI PumpFun scraper for better data
+      const rapidApiResponse = await this.getPumpFunDataFromRapidAPI(mint);
+      if (rapidApiResponse) {
+        return rapidApiResponse;
+      }
+
+      // Fallback to frontend API
       const response = await axios.get(`https://frontend-api.pump.fun/coins/${mint}`, {
         timeout: 5000
       });
@@ -838,12 +842,64 @@ export class PriceDiscoveryService {
           return solReserves * solPrice;
         }
         // Fallback to using a percentage of market cap as estimated liquidity
-        return response.data.usd_market_cap ? response.data.usd_market_cap * 0.1 : null;
+        return response.data.usd_market_cap ? response.data.usd_market_cap * 0.15 : null;
       }
 
       return null;
     } catch (error) {
       console.error(`Error getting pump.fun liquidity for ${mint}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get pump.fun data from RapidAPI scraper
+   */
+  private async getPumpFunDataFromRapidAPI(mint: string): Promise<number | null> {
+    try {
+      const rapidApiKey = process.env.RAPIDAPI_KEY || '569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22';
+      
+      const response = await axios.get(`https://pumpfun-scraper-api.p.rapidapi.com/search_tokens?term=${mint}`, {
+        timeout: 5000,
+        headers: {
+          'x-rapidapi-host': 'pumpfun-scraper-api.p.rapidapi.com',
+          'x-rapidapi-key': rapidApiKey
+        }
+      });
+
+      if (response.data?.data && response.data.data.length > 0) {
+        const tokenData = response.data.data[0];
+        const bondingProgress = parseFloat(tokenData.bondingCurveProgress || '0');
+        const marketCap = parseFloat(tokenData.marketCap || '0');
+        
+        console.log(`PumpFun data for ${mint}: progress=${bondingProgress}, marketCap=${marketCap}`);
+        
+        if (marketCap > 0 && bondingProgress > 0) {
+          // Calculate liquidity based on bonding curve mechanics:
+          // - Bonding curve starts with 30 SOL virtual liquidity
+          // - At 100% progress, there's 85 SOL in the curve
+          // - Current SOL = 30 + (progress * 55)
+          const solInCurve = 30 + (bondingProgress * 55);
+          
+          // Convert SOL to USD (approximate)
+          const solPriceUSD = 240; // Current approximate SOL price
+          const liquidityUSD = solInCurve * solPriceUSD;
+          
+          console.log(`Calculated pump.fun liquidity: $${liquidityUSD} USD (${solInCurve} SOL)`);
+          return liquidityUSD;
+        } else if (marketCap > 0) {
+          // Fallback: estimate liquidity as percentage of market cap
+          const estimatedLiquidity = marketCap * 0.20; // 20% estimate for early stage
+          console.log(`Estimated pump.fun liquidity from market cap: $${estimatedLiquidity} USD`);
+          return estimatedLiquidity;
+        }
+      }
+      
+      return null;
+    } catch (error: any) {
+      if (!error.message?.includes('429')) {
+        console.error(`RapidAPI PumpFun error for ${mint}:`, error.message);
+      }
       return null;
     }
   }
@@ -987,10 +1043,13 @@ export class PriceDiscoveryService {
         if (now - this.lastJupiterCall >= this.jupiterCallDelay) {
           this.lastJupiterCall = now;
           
-          const response = await axios.get(this.jupiterApiUrl, {
-            params: { ids: uncachedMints.join(',') },
-            timeout: 10000
+          const priceUrl = getJupiterPriceUrl(uncachedMints);
+          const fetchOptions = getJupiterFetchOptions({
+            timeout: 15000, // 15 seconds for batch
+            maxRetries: 3
           });
+          
+          const response = await axios.get(priceUrl, fetchOptions);
           
           if (response.data?.data) {
             for (const mint of uncachedMints) {

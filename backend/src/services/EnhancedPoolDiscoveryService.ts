@@ -1,9 +1,12 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import supabase from '../utils/supabaseClient';
+import { heliusPoolDiscoveryService } from './HeliusPoolDiscoveryService';
+import { fetchWithFallback } from '../utils/fetchWithFallback';
+import { getJupiterQuoteUrl, getJupiterFetchOptions } from '../utils/jupiterEndpoints';
 
 interface PoolInfo {
   address: string;
-  type: 'pump.fun' | 'raydium' | 'orca' | 'meteora' | 'unknown';
+  type: 'pump.fun' | 'raydium' | 'orca' | 'meteora' | 'jupiter' | 'unknown';
   baseToken: string;
   quoteToken: string;
   source: 'database' | 'onchain' | 'jupiter' | 'dexscreener';
@@ -77,7 +80,15 @@ class EnhancedPoolDiscoveryService {
       return jupiterPool;
     }
 
-    // Strategy 4: Query DexScreener API
+    // Strategy 4: Use Helius RPC for pool discovery (no external API dependencies)
+    const heliusPool = await this.queryHeliusRPC(tokenMint);
+    if (heliusPool) {
+      this.poolCache.set(tokenMint, heliusPool);
+      await this.saveToDatabase(tokenMint, heliusPool);
+      return heliusPool;
+    }
+
+    // Strategy 5: Query DexScreener API (fallback)
     const dexScreenerPool = await this.queryDexScreenerAPI(tokenMint);
     if (dexScreenerPool) {
       this.poolCache.set(tokenMint, dexScreenerPool);
@@ -85,7 +96,7 @@ class EnhancedPoolDiscoveryService {
       return dexScreenerPool;
     }
 
-    // Strategy 5: Scan Raydium pools on-chain
+    // Strategy 6: Scan Raydium pools on-chain (last resort)
     const raydiumPool = await this.scanRaydiumPools(tokenMint);
     if (raydiumPool) {
       this.poolCache.set(tokenMint, raydiumPool);
@@ -153,34 +164,116 @@ class EnhancedPoolDiscoveryService {
   }
 
   /**
+   * Query Helius RPC for pool information (no external API dependencies)
+   */
+  private async queryHeliusRPC(tokenMint: string): Promise<PoolInfo | null> {
+    try {
+      const pool = await heliusPoolDiscoveryService.discoverPool(tokenMint);
+      if (pool && pool.type !== 'unknown') {
+        // Map Helius pool types to our simplified types
+        let mappedType: PoolInfo['type'] = 'unknown';
+        switch (pool.type) {
+          case 'pump.fun':
+            mappedType = 'pump.fun';
+            break;
+          case 'raydium-amm':
+            mappedType = 'raydium';
+            break;
+          case 'orca-whirlpool':
+            mappedType = 'orca';
+            break;
+          case 'meteora-dlmm':
+            mappedType = 'meteora';
+            break;
+          case 'fluxbeam':
+          case 'jupiter':
+            mappedType = 'jupiter'; // Group other DEXes under jupiter
+            break;
+        }
+        
+        return {
+          address: pool.address,
+          type: mappedType,
+          baseToken: pool.baseToken,
+          quoteToken: pool.quoteToken,
+          source: 'onchain' as const
+        };
+      }
+    } catch (error) {
+      console.error('Helius RPC pool discovery error:', error);
+    }
+    return null;
+  }
+
+  /**
    * Query Jupiter API for pool information
    */
   private async queryJupiterAPI(tokenMint: string): Promise<PoolInfo | null> {
     try {
-      // First check if token exists on Jupiter
-      const priceResponse = await fetch(`https://price.jup.ag/v6/price?ids=${tokenMint}`);
-      if (!priceResponse.ok) return null;
+      // Use the new Jupiter free tier endpoint
+      // Get a quote to check if the token is tradeable
+      const SOL_MINT = 'So11111111111111111111111111111111111111112';
+      const quoteUrl = getJupiterQuoteUrl({
+        inputMint: tokenMint,
+        outputMint: SOL_MINT,
+        amount: 1000000
+      });
       
-      const priceData = await priceResponse.json();
-      if (!priceData.data[tokenMint]) return null;
+      const fetchOptions = getJupiterFetchOptions({
+        timeout: 10000, // 10 seconds
+        maxRetries: 3
+      });
+      
+      const quoteData = await fetchWithFallback(
+        quoteUrl,
+        {
+          ...fetchOptions,
+          cacheKey: `jupiter:quote:${tokenMint}`,
+          cacheTTL: 300, // 5 minutes
+          serviceName: 'jupiter-api',
+          fallbackData: null,
+        }
+      ).catch((error) => {
+        // Handle network errors gracefully
+        console.log(`Jupiter API error for token ${tokenMint}:`, error.message);
+        return null;
+      });
+      
+      if (!quoteData) {
+        return null; // Network error already logged
+      }
+      
+      // If we get a valid quote, the token has liquidity
+      if (!quoteData || quoteData.error) {
+        console.log(`No Jupiter quote available for token ${tokenMint}`);
+        return null;
+      }
 
-      // Query Jupiter's markets API for pool information
-      const marketsResponse = await fetch(`https://quote-api.jup.ag/v6/markets?inputMint=${tokenMint}`);
-      if (!marketsResponse.ok) return null;
-
-      const markets = await marketsResponse.json();
-      if (markets.length > 0) {
-        // Find the most liquid pool
-        const bestMarket = markets.sort((a: any, b: any) => 
-          (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
-        )[0];
-
-        console.log(`✅ Found pool via Jupiter: ${bestMarket.id}`);
+      // Extract route information from the quote
+      if (quoteData.routePlan && quoteData.routePlan.length > 0) {
+        const firstRoute = quoteData.routePlan[0];
+        const swapInfo = firstRoute.swapInfo;
+        
+        if (swapInfo && swapInfo.ammKey) {
+          console.log(`✅ Found pool via Jupiter: ${swapInfo.ammKey}`);
+          return {
+            address: swapInfo.ammKey,
+            type: this.getPoolTypeFromLabel(swapInfo.label || 'unknown'),
+            baseToken: tokenMint,
+            quoteToken: SOL_MINT,
+            source: 'jupiter'
+          };
+        }
+      }
+      
+      // If no route plan, but we got a quote, return a generic pool info
+      if (quoteData.inAmount && quoteData.outAmount) {
+        console.log(`✅ Token ${tokenMint} is tradeable on Jupiter`);
         return {
-          address: bestMarket.id,
-          type: this.getPoolTypeFromLabel(bestMarket.label),
+          address: 'jupiter-aggregated', // Placeholder for aggregated pools
+          type: 'jupiter',
           baseToken: tokenMint,
-          quoteToken: bestMarket.quoteMint || this.QUOTE_TOKENS.SOL,
+          quoteToken: SOL_MINT,
           source: 'jupiter'
         };
       }
@@ -195,10 +288,16 @@ class EnhancedPoolDiscoveryService {
    */
   private async queryDexScreenerAPI(tokenMint: string): Promise<PoolInfo | null> {
     try {
-      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`);
-      if (!response.ok) return null;
-
-      const data = await response.json();
+      const data = await fetchWithFallback(
+        `https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`,
+        {
+          cacheKey: `dexscreener:${tokenMint}`,
+          cacheTTL: 300, // 5 minutes
+          serviceName: 'dexscreener-api',
+          timeout: 10000,
+          fallbackData: null,
+        }
+      );
       if (data.pairs && data.pairs.length > 0) {
         // Get the most liquid pair
         const bestPair = data.pairs.sort((a: any, b: any) => 

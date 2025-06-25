@@ -396,6 +396,86 @@ router.post('/simulate-rugpull', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/pool-protection/discover
+ * Discover pools for a token without enabling protection
+ */
+router.post('/discover', async (req: Request, res: Response) => {
+  try {
+    const { tokenMint, walletAddress } = req.body;
+
+    if (!tokenMint || !walletAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token mint and wallet address are required',
+      });
+    }
+
+    console.log('Pool discovery request:', { tokenMint, walletAddress });
+
+    // Import and create pool discovery service
+    const { EnhancedPoolDiscoveryService } = await import('../services/EnhancedPoolDiscoveryService');
+    const { Connection } = await import('@solana/web3.js');
+    const config = await import('../config');
+    
+    const connection = new Connection(config.default.heliusRpcUrl);
+    const poolDiscoveryService = new EnhancedPoolDiscoveryService(connection);
+    
+    // Discover pool for the token
+    const pool = await poolDiscoveryService.discoverPool(tokenMint);
+    console.log(`Pool discovery result for token ${tokenMint}:`, pool);
+    
+    const pools = pool ? [pool] : [];
+    
+    if (pools.length > 0) {
+      // Store pool information in database
+      const supabase = require('../utils/supabaseClient').default;
+      const mainPool = pools[0]; // Use the first pool as the main pool
+      
+      // Update wallet_tokens with pool information
+      await supabase
+        .from('wallet_tokens')
+        .update({
+          pool_address: mainPool.address,
+          dex_name: mainPool.type,
+          updated_at: new Date().toISOString()
+        })
+        .eq('token_mint', tokenMint)
+        .eq('wallet_address', walletAddress);
+      
+      // Also update protected_tokens if it exists
+      await supabase
+        .from('protected_tokens')
+        .update({
+          pool_address: mainPool.address,
+          updated_at: new Date().toISOString()
+        })
+        .eq('token_mint', tokenMint)
+        .eq('wallet_address', walletAddress);
+      
+      res.json({
+        success: true,
+        message: 'Pool discovered successfully',
+        poolAddress: mainPool.address,
+        dex: mainPool.type,
+        poolCount: pools.length
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'No pools found for token',
+        poolCount: 0
+      });
+    }
+  } catch (error) {
+    console.error('Error discovering pools:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Internal server error',
+    });
+  }
+});
+
+/**
  * WebSocket endpoint for real-time pool monitoring events
  * WS /api/pool-protection/stream/:tokenMint
  */

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import supabase from '../utils/supabaseClient';
 import { poolMonitoringService } from '../services/PoolMonitoringService';
 import { protectionServiceFacade } from '../services/ProtectionServiceFacade';
+import { liquidityVelocityTracker } from '../services/LiquidityVelocityTracker';
 
 const router = Router();
 
@@ -86,6 +87,10 @@ router.post('/', async (req: Request, res: Response) => {
         await poolMonitoringService.protectToken(tokenMint, walletAddress);
       }
     }
+    
+    // Start velocity tracking for enhanced rug detection
+    await liquidityVelocityTracker.trackToken(tokenMint);
+    console.log(`[ProtectedTokens] Started velocity tracking for ${tokenMint}`);
 
     res.json({
       success: true,

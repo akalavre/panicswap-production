@@ -12,6 +12,8 @@ export class SupabaseBroadcastService {
   private static instance: SupabaseBroadcastService;
   private channels: Map<string, RealtimeChannel> = new Map();
   private presenceChannel: RealtimeChannel | null = null;
+  private listeners: Map<string, Set<Function>> = new Map();
+  private isInitialized = false;
 
   private constructor() {
     this.initializeChannels();
@@ -25,10 +27,25 @@ export class SupabaseBroadcastService {
   }
 
   private async initializeChannels() {
+    if (this.isInitialized) return;
+    
     console.log('[SupabaseBroadcast] Initializing broadcast channels...');
     
     // Main alert channel for critical events
     const alertChannel = supabase.channel('protection-alerts');
+    
+    // Set up event handlers once
+    alertChannel.on('broadcast', { event: 'rugpull:detected' }, ({ payload }) => {
+      this.notifyListeners('rugpull', payload);
+    });
+    
+    alertChannel.on('broadcast', { event: 'protection:executed' }, ({ payload }) => {
+      this.notifyListeners('protection', payload);
+    });
+    
+    alertChannel.on('broadcast', { event: 'price:alert' }, ({ payload }) => {
+      this.notifyListeners('price', payload);
+    });
     
     // Subscribe to the channel
     await alertChannel.subscribe((status) => {
@@ -46,6 +63,21 @@ export class SupabaseBroadcastService {
         console.log('[SupabaseBroadcast] ✅ Presence channel subscribed');
       }
     });
+    
+    this.isInitialized = true;
+  }
+
+  private notifyListeners(eventType: string, payload: any) {
+    const listeners = this.listeners.get(eventType);
+    if (listeners) {
+      listeners.forEach(callback => {
+        try {
+          callback(payload);
+        } catch (error) {
+          console.error(`[SupabaseBroadcast] Error in ${eventType} listener:`, error);
+        }
+      });
+    }
   }
 
   /**
@@ -159,24 +191,30 @@ export class SupabaseBroadcastService {
    * Subscribe to rugpull alerts
    */
   onRugpullAlert(callback: (alert: BroadcastAlert) => void) {
-    const channel = this.channels.get('alerts');
-    if (channel) {
-      channel.on('broadcast', { event: 'rugpull:detected' }, ({ payload }) => {
-        callback(payload);
-      });
+    if (!this.listeners.has('rugpull')) {
+      this.listeners.set('rugpull', new Set());
     }
+    this.listeners.get('rugpull')!.add(callback);
   }
 
   /**
    * Subscribe to protection execution alerts
    */
   onProtectionExecution(callback: (alert: BroadcastAlert) => void) {
-    const channel = this.channels.get('alerts');
-    if (channel) {
-      channel.on('broadcast', { event: 'protection:executed' }, ({ payload }) => {
-        callback(payload);
-      });
+    if (!this.listeners.has('protection')) {
+      this.listeners.set('protection', new Set());
     }
+    this.listeners.get('protection')!.add(callback);
+  }
+
+  /**
+   * Subscribe to price alerts
+   */
+  onPriceAlert(callback: (alert: BroadcastAlert) => void) {
+    if (!this.listeners.has('price')) {
+      this.listeners.set('price', new Set());
+    }
+    this.listeners.get('price')!.add(callback);
   }
 
   /**
@@ -198,34 +236,18 @@ export class SupabaseBroadcastService {
    */
   async untrackMonitoring(tokenMint: string) {
     if (this.presenceChannel) {
-      const presenceState = await this.presenceChannel.presenceState();
-      const myPresence = Object.values(presenceState).find(
-        (p: any) => p.tokenMint === tokenMint
-      );
-      if (myPresence) {
-        await this.presenceChannel.untrack();
-      }
+      await this.presenceChannel.untrack();
     }
   }
 
   /**
-   * Get active monitoring list
-   */
-  async getActiveMonitoring(): Promise<any[]> {
-    if (this.presenceChannel) {
-      const presenceState = await this.presenceChannel.presenceState();
-      return Object.values(presenceState);
-    }
-    return [];
-  }
-
-  /**
-   * Cleanup channels
+   * Cleanup and unsubscribe from all channels
    */
   async cleanup() {
+    console.log('[SupabaseBroadcast] Cleaning up channels...');
+    
     for (const [name, channel] of this.channels) {
       await channel.unsubscribe();
-      console.log(`[SupabaseBroadcast] Unsubscribed from ${name} channel`);
     }
     
     if (this.presenceChannel) {
@@ -233,8 +255,11 @@ export class SupabaseBroadcastService {
     }
     
     this.channels.clear();
+    this.listeners.clear();
+    this.presenceChannel = null;
+    this.isInitialized = false;
   }
 }
 
-// Export singleton instance
+// Export singleton
 export const broadcastService = SupabaseBroadcastService.getInstance();

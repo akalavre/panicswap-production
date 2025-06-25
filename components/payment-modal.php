@@ -65,11 +65,11 @@
                                 </div>
                                 <div class="text-right">
                                     <div class="text-2xl font-bold text-white">
-                                        <span id="sol-price-weekly">0.248</span> SOL
+                                        <span id="sol-price-weekly">0.141</span> SOL
                                     </div>
                                     <div class="text-xs text-gray-400">per week</div>
                                     <div class="text-sm text-green-400 mt-1">
-                                        <span id="sol-price-monthly">0.99</span> SOL/month
+                                        <span id="sol-price-monthly">0.56</span> SOL/month
                                     </div>
                                 </div>
                             </div>
@@ -92,11 +92,11 @@
                                 </div>
                                 <div class="text-right">
                                     <div class="text-2xl font-bold text-white">
-                                        $<span id="usd-price-weekly">40.26</span>
+                                        $<span id="usd-price-weekly">19.75</span>
                                     </div>
                                     <div class="text-xs text-gray-400">per week</div>
                                     <div class="text-sm text-gray-400 mt-1">
-                                        $<span id="usd-price-monthly">161.04</span>/month
+                                        $<span id="usd-price-monthly">79</span>/month
                                     </div>
                                 </div>
                             </div>
@@ -141,8 +141,25 @@
                             </div>
                         </div>
                         
+                        <!-- Auto-renewal consent for hot wallets -->
+                        <div id="auto-renewal-consent" class="mb-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30 hidden">
+                            <label class="flex items-start space-x-3 cursor-pointer">
+                                <input type="checkbox" id="auto-renew-checkbox" class="mt-1 w-4 h-4 rounded border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 bg-gray-800">
+                                <div class="text-sm">
+                                    <p class="text-white font-medium mb-1">Enable automatic renewal</p>
+                                    <p class="text-gray-400">Your subscription will automatically renew every week. We'll charge <span class="text-white font-medium">0.141 SOL</span> from your hot wallet. You can cancel anytime.</p>
+                                    <p class="text-xs text-yellow-400 mt-2">
+                                        <svg class="w-3 h-3 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        You'll receive a notification 24 hours before each charge
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                        
                         <button id="pay-with-sol-btn" class="w-full btn btn-primary text-lg py-4">
-                            Pay <span id="sol-payment-amount">0.99</span> SOL
+                            Pay <span id="sol-payment-amount">0.56</span> SOL
                         </button>
                     </div>
                 </div>
@@ -156,7 +173,7 @@
                     </div>
                     
                     <button id="pay-with-stripe-btn" class="w-full btn btn-primary text-lg py-4">
-                        Pay $<span id="usd-payment-amount">161.04</span> with Card
+                        Pay $<span id="usd-payment-amount">79</span> with Card
                     </button>
                     
                     <div class="mt-4 flex items-center justify-center space-x-4 text-xs text-gray-500">
@@ -170,7 +187,7 @@
                 <!-- Terms and Conditions -->
                 <div class="mt-6 pt-6 border-t border-gray-800">
                     <p class="text-xs text-gray-500 text-center">
-                        By subscribing, you agree to our <a href="#" class="text-orange-400 hover:text-orange-300">Terms of Service</a> and <a href="#" class="text-orange-400 hover:text-orange-300">Privacy Policy</a>.
+                        By subscribing, you agree to our <a href="terms.php" class="text-orange-400 hover:text-orange-300">Terms of Service</a> and <a href="privacy.php" class="text-orange-400 hover:text-orange-300">Privacy Policy</a>.
                         Subscriptions are billed monthly and can be cancelled anytime.
                     </p>
                 </div>
@@ -186,7 +203,7 @@
                         <span class="text-gray-400">Secure payment</span>
                     </div>
                     <div class="text-sm text-gray-400">
-                        Questions? <a href="#" class="text-orange-400 hover:text-orange-300">Contact support</a>
+                        Questions? <a href="contact.php" class="text-orange-400 hover:text-orange-300">Contact support</a>
                     </div>
                 </div>
             </div>

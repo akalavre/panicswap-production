@@ -51,6 +51,7 @@ define('PAYMENT_WALLET', getenv('PAYMENT_WALLET') ?: '6PP4BH39zThbjRU8XhJ9AwXRqP
 
 // Price API Configuration
 define('JUPITER_API_URL', getenv('JUPITER_API_URL') ?: 'https://price.jup.ag/v6');
+define('JUPITER_LITE_URL', getenv('JUPITER_LITE_URL') ?: 'https://lite-api.jup.ag');
 define('COINGECKO_API_KEY', getenv('COINGECKO_API_KEY') ?: 'CG-a65g1Q3p6a55jvzewEunnRnJ');
 
 // Moralis API Configuration
@@ -82,6 +83,12 @@ define('ENABLE_TESTNET', getenv('ENABLE_TESTNET') === 'true' ? true : false);
 // Debug Mode
 define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true' ? true : false);
 
+// Initialize Sentry for error tracking
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+    require_once __DIR__ . '/config/sentry.php';
+}
+
 // Test Mode Configuration
 define('TEST_MODE', getenv('TEST_MODE') === 'true' ? true : false);
 define('TEST_SUBSCRIPTION_PLAN', getenv('TEST_SUBSCRIPTION_PLAN') ?: 'pro');
@@ -99,6 +106,7 @@ function getPublicConfig() {
         'HELIUS_API_KEY' => HELIUS_API_KEY,
         'PAYMENT_WALLET' => PAYMENT_WALLET,
         'JUPITER_API_URL' => JUPITER_API_URL,
+        'JUPITER_LITE_URL' => JUPITER_LITE_URL,
         'STREAMING_WS_URL' => STREAMING_WS_URL,
         'APP_NAME' => APP_NAME,
         'APP_URL' => APP_URL,

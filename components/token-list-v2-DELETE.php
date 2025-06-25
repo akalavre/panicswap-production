@@ -1,3 +1,7 @@
+<?php
+// Include the token display helper  
+require_once __DIR__ . '/helpers/token-display.php';
+?>
 <!-- Token List V2 - Matching Screenshot Design -->
 <div class="card-dark rounded-lg">
     <!-- Header -->
@@ -343,7 +347,11 @@ function renderTokensV2() {
     
     // Update stats
     document.getElementById('total-value').textContent = totalValue.toFixed(2);
-    document.getElementById('protected-count').textContent = protectedCount;
+    // Only update protected count if we have a list-specific element
+    const protectedCountList = document.getElementById('protected-count-list-v2');
+    if (protectedCountList) {
+        protectedCountList.textContent = protectedCount;
+    }
     document.getElementById('risk-count').textContent = riskCount;
     
     // Show warning banner if high risk tokens
@@ -353,6 +361,50 @@ function renderTokensV2() {
 }
 
 // Render single token row
+// JavaScript version of token display helper for V2
+function renderTokenDisplayV2(token) {
+    // Check if token has pending metadata
+    const isPending = token.metadata_status === 'pending';
+    
+    if (isPending) {
+        // Return loading state with gradient animation
+        return `
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-full token-loader"></div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-medium token-loading-text">Loading...</span>
+                    </div>
+                    <div class="text-xs text-gray-500">Fetching metadata</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Normal token display
+    const symbol = token.symbol || 'UNKNOWN';
+    const name = token.name || 'Unknown Token';
+    const image = token.logo_uri || token.image || token.logo_url || '/PanicSwap-php/assets/images/token-placeholder.svg';
+    const platformBadge = getPlatformBadgeV2(token.platform);
+    
+    return `
+        <div class="flex items-center space-x-3">
+            <img src="${image}" 
+                 alt="${symbol}" 
+                 class="w-8 h-8 rounded-full bg-gray-800 object-cover"
+                 onerror="this.src='/PanicSwap-php/assets/images/token-placeholder.svg'"
+                 loading="lazy">
+            <div>
+                <div class="flex items-center space-x-2">
+                    <span class="font-medium text-white">${symbol}</span>
+                    ${platformBadge}
+                </div>
+                <div class="text-xs text-gray-500">${name}</div>
+            </div>
+        </div>
+    `;
+}
+
 function renderTokenRowV2(token) {
     const price = token.price || 0;
     const value = (token.balance || 0) * price;
@@ -370,20 +422,7 @@ function renderTokenRowV2(token) {
     return `
         <tr class="border-t border-gray-800 hover:bg-gray-900/50 token-row">
             <td class="px-4 py-3">
-                <div class="flex items-center space-x-3">
-                    <img src="${token.logo_uri || token.image || '/assets/images/token-placeholder.svg'}" 
-                         alt="${token.symbol}" 
-                         class="w-8 h-8 rounded-full bg-gray-800 object-cover"
-                         onerror="this.src='/assets/images/token-placeholder.svg'"
-                         loading="lazy">
-                    <div>
-                        <div class="flex items-center space-x-2">
-                            <span class="font-medium text-white">${token.symbol || 'Unknown'}</span>
-                            ${platformBadge}
-                        </div>
-                        <div class="text-xs text-gray-500">${token.name || ''}</div>
-                    </div>
-                </div>
+                ${renderTokenDisplayV2(token)}
             </td>
             <td class="px-4 py-3 text-center">
                 <span class="${riskClass} font-semibold">${riskScore}%</span>

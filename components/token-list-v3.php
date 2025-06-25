@@ -1,3 +1,7 @@
+<?php
+// Include the token display helper
+require_once __DIR__ . '/helpers/token-display.php';
+?>
 <!-- Token List V3 - Exact Tailwind Match -->
 <style>
 /* Flash animations for price updates */
@@ -23,52 +27,66 @@
 #token-list-tbody-v3 td {
     transition: background-color 0.3s ease;
 }
+
+/* ML Risk badge styles */
+.ml-risk-badge {
+    transition: all 0.3s ease;
+}
+
+.ml-risk-badge:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+/* ML Risk update animation */
+@keyframes ml-update-flash {
+    0% { 
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+        transform: scale(1);
+    }
+    50% { 
+        box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+        transform: scale(1.05);
+    }
+    100% { 
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+        transform: scale(1);
+    }
+}
+
+.ml-risk-updated .ml-risk-badge {
+    animation: ml-update-flash 0.8s ease-out;
+}
+
+/* Placeholder badge pulse */
+.placeholder-badge {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.placeholder-badge svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
 </style>
 
 <div class="card-glass">
-    <!-- DEX Coverage Alert -->
-    <div class="mb-4">
-        <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="relative">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle h-5 w-5 text-warning-400">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" x2="12" y1="8" y2="12"></line>
-                            <line x1="12" x2="12.01" y1="16" y2="16"></line>
-                        </svg>
-                    </div>
-                    <div>
-                        <h4 class="font-medium text-sm">DEX Coverage: 2 of 11 Available</h4>
-                        <p class="text-xs text-gray-400 mt-0.5">Your Pro plan shows tokens from Raydium & Orca only</p>
-                    </div>
-                </div>
-                <button class="text-primary-400 hover:text-primary-300 text-sm underline">View Details</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Demo Mode Banner -->
-    <div id="demo-mode-banner-v3" class="mb-4 hidden">
-        <div class="bg-purple-900/20 border border-purple-800/50 rounded-lg p-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="relative">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-flask h-5 w-5 text-purple-400">
-                            <path d="M10 2v8L8 12l-2 2 5 8h2l5-8-2-2-2-2V2"></path>
-                            <path d="M8.5 2h7"></path>
-                            <path d="M7 16h10"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h4 class="font-medium text-sm text-purple-300">Demo Mode Active</h4>
-                        <p class="text-xs text-gray-400 mt-0.5">Testing with sample tokens. Connect wallet to see your real tokens.</p>
-                    </div>
-                </div>
-                <button onclick="document.getElementById('connect-wallet-btn')?.click()" class="text-purple-400 hover:text-purple-300 text-sm underline">Connect Wallet</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
@@ -157,49 +175,33 @@
     </div>
 
     <!-- Demo Banner -->
-    <div class="bg-gradient-to-r from-primary-900/20 to-purple-900/20 border border-primary-600/50 rounded-lg p-4 mb-6">
-        <div class="flex items-start gap-2 mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap h-4 w-4 text-primary-400 mt-0.5">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-            </svg>
-            <div class="flex-1">
-                <h4 class="text-sm font-semibold text-primary-300">🎮 Try PanicSwap Demo - Test with ANY Real Token!</h4>
-                <p class="text-xs text-gray-300 mt-1">Enter any token mint address from pump.fun, Raydium, or your favorite DEX. We'll fetch real blockchain data and show you how our protection works.</p>
-                <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
-                    <div class="text-green-400">✓ Real-time price monitoring ✓ Liquidity tracking ✓ Rugpull detection alerts</div>
-                    <div class="text-green-400">✓ Protection triggers (simulated) ✓ Emergency notifications ✓ Full dashboard features</div>
-                </div>
-                <p class="text-xs text-yellow-400 mt-2 font-medium">💡 Demo mode: Protection alerts are real, but swaps are simulated</p>
-            </div>
-        </div>
-        <div class="flex gap-2">
-            <input placeholder="Paste any Solana token mint address (e.g., from pump.fun or Raydium)" 
-                   class="flex-1 bg-gray-900/50 border border-gray-700 rounded px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" 
-                   type="text" 
-                   id="demo-token-input">
-            <button class="btn-primary px-4 py-2 text-sm flex items-center gap-2" onclick="startDemo(event)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap h-4 w-4">
+    <div class="bg-gradient-to-r from-primary-900/20 to-purple-900/20 border border-primary-600/50 rounded-lg p-5 mb-6">
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-primary-500/20 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap h-5 w-5 text-primary-400">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
-                Start Demo
-            </button>
-        </div>
-        <div class="mt-3 space-y-2">
-            <div class="text-xs text-gray-400">
-                <p class="font-medium text-gray-300 mb-1">Popular tokens to demo:</p>
-                <div class="grid grid-cols-3 gap-2">
-                    <button class="text-left p-2 bg-gray-800/50 rounded hover:bg-gray-800/70 transition-colors" onclick="setDemoToken('EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm')">
-                        <span class="text-primary-400 font-medium">WIF</span>
-                        <span class="text-gray-500 block text-xs truncate">EKpQG...zcjm</span>
+            </div>
+            <div class="flex-1">
+                <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-base font-semibold text-white">Try PanicSwap Protection</h4>
+                    <span class="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded-full font-medium">Live Demo</span>
+                </div>
+                <p class="text-sm text-gray-300 mb-4">Test with any real Solana token to see our protection in action</p>
+                
+                <div class="flex gap-2 mb-3">
+                    <input placeholder="Enter any Solana token mint address" class="flex-1 bg-gray-900/70 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/50 transition-all" type="text" id="demo-token-input">
+                    <button class="btn-primary px-6 py-2.5 text-sm font-medium flex items-center gap-2 hover:shadow-lg transition-all" onclick="startDemo(event)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Start Demo
                     </button>
-                    <button class="text-left p-2 bg-gray-800/50 rounded hover:bg-gray-800/70 transition-colors" onclick="setDemoToken('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263')">
-                        <span class="text-primary-400 font-medium">BONK</span>
-                        <span class="text-gray-500 block text-xs truncate">DezXA...B263</span>
-                    </button>
-                    <button class="text-left p-2 bg-gray-800/50 rounded hover:bg-gray-800/70 transition-colors" onclick="setDemoToken('HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC')">
-                        <span class="text-primary-400 font-medium">PENG</span>
-                        <span class="text-gray-500 block text-xs truncate">HeLp6...8jwC</span>
-                    </button>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <span class="text-xs text-gray-400">Quick try:</span>
+                    <div class="flex gap-2" id="quick-try-tokens"><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="SwarmSphere">Sphere</button><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="Romeo Open">ROMEO</button><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="The Hive">HIVE</button><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="gorbagana pnut">Gnut</button><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="Yourself">YOURSELF</button><button class="px-3 py-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white text-xs rounded-md transition-all duration-200 font-medium" title="SLOPCOIN ">SLOPCOIN </button></div>
                 </div>
             </div>
         </div>
@@ -208,7 +210,7 @@
     <!-- Table -->
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-800">
-            <thead>
+            <thead id="token-list-thead-v3">
                 <tr>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Token</th>
                     <th class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -252,14 +254,14 @@
                     </th>
                     <th class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         <div class="flex items-center justify-end whitespace-nowrap">
-                            Liquidity
+                            Balance
                             <div class="group relative inline-flex items-center ml-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info w-3 h-3 text-gray-500 cursor-help">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <path d="M12 16v-4"></path>
                                     <path d="M12 8h.01"></path>
                                 </svg>
-                                <div class="invisible group-hover:visible absolute z-50 w-48 p-3 mt-1 text-xs leading-relaxed text-gray-300 bg-gray-800 border border-gray-700 rounded-lg shadow-lg -left-20 top-5 whitespace-normal break-words">Current liquidity with 1h change</div>
+                                <div class="invisible group-hover:visible absolute z-50 w-48 p-3 mt-1 text-xs leading-relaxed text-gray-300 bg-gray-800 border border-gray-700 rounded-lg shadow-lg -left-20 top-5 whitespace-normal break-words">Your token balance in this wallet</div>
                             </div>
                         </div>
                     </th>
@@ -381,13 +383,19 @@ let tokenListV3State = {
     loading: true,
     filter: 'all',
     showBalances: true,
-    hiddenTokens: new Set()
+    hiddenTokens: new Set(),
+    recentChanges: new Map(), // Track recent protection changes to prevent overwrites
+    autoProtectEnabled: JSON.parse(localStorage.getItem('autoProtectEnabled') || 'false'),
+    autoProtectProcessing: false
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[Dashboard] Token list v3 initializing...');
     console.log('[Dashboard] Backend URL:', window.BACKEND_URL || 'http://localhost:3001');
+    
+    // Export state for global access
+    window.tokenListV3State = tokenListV3State;
     
     // Wait for Supabase to load
     const waitForSupabase = setInterval(() => {
@@ -396,6 +404,14 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Supabase client ready, loading tokens...');
             console.log('[Dashboard] Starting initial token load...');
             loadTokensV3();
+            
+            // Check for tokens with pending metadata after load completes
+            setTimeout(() => {
+                if (typeof checkAndRefreshPendingTokens === 'function') {
+                    console.log('[Dashboard] Checking for tokens with pending metadata...');
+                    checkAndRefreshPendingTokens();
+                }
+            }, 2000); // Wait 2 seconds for tokens to load
             
             // Set up periodic token registration refresh (every 30 seconds)
             setInterval(() => {
@@ -406,8 +422,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }, 30000); // 30 seconds
             
-            // Subscribe to price updates immediately
-            subscribeToTokenUpdatesV3();
+            // Initialize auto-protect toggle
+            initializeAutoProtectToggle();
         }
     }, 100);
     
@@ -422,6 +438,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const autoProtectToggle = document.getElementById('auto-protect-v3');
     if (autoProtectToggle) {
         autoProtectToggle.addEventListener('change', function(e) {
+            tokenListV3State.autoProtectEnabled = e.target.checked; // keep state in sync
+            updateAutoProtectUI();                                   // instantly update visuals
             console.log('Auto-protect:', e.target.checked);
         });
     }
@@ -435,8 +453,8 @@ async function loadTokensV3() {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             await loadFromSupabaseV3();
         } else {
-            // Mock data
-            loadMockDataV3();
+            // Show empty state when no supabase client
+            showEmptyStateV3();
         }
     } catch (error) {
         console.error('Error loading tokens:', error);
@@ -458,8 +476,9 @@ async function loadFromSupabaseV3() {
                 console.log('Fetching tokens for wallet:', walletAddress);
                 tokens = await window.SupabaseTokenFetcher.fetchDashboardTokens(walletAddress);
             } else {
-                console.log('No wallet connected, fetching demo tokens...');
-                tokens = await window.SupabaseTokenFetcher.fetchDemoTokens();
+                console.log('No wallet connected');
+                showEmptyStateV3();
+                return;
             }
             
             if (tokens && tokens.length > 0) {
@@ -472,27 +491,69 @@ async function loadFromSupabaseV3() {
                     balance: tokens[0]?.balance
                 });
                 console.log('[Dashboard] About to register tokens with backend');
-                tokenListV3State.tokens = tokens;
+                
+                // Load hidden tokens from localStorage
+                const hiddenTokens = JSON.parse(localStorage.getItem('hiddenTokens') || '[]');
+                const walletHiddenMints = new Set(
+                    hiddenTokens
+                        .filter(t => t.wallet === walletAddress)
+                        .map(t => t.mint)
+                );
+                
+                // Filter out hidden tokens
+                const filteredTokens = tokens.filter(token => !walletHiddenMints.has(token.token_mint));
+                
+                // Preserve recent protection state changes
+                if (tokenListV3State.recentChanges && tokenListV3State.recentChanges.size > 0) {
+                    filteredTokens.forEach(token => {
+                        const recentChange = tokenListV3State.recentChanges.get(token.token_mint);
+                        if (recentChange && (Date.now() - recentChange.timestamp) < 5000) {
+                            console.log(`Preserving recent protection state for ${token.symbol}: ${recentChange.state}`);
+                            token.protected = recentChange.state;
+                            token.monitoring_active = recentChange.state;
+                        }
+                    });
+                }
+                
+                tokenListV3State.tokens = filteredTokens;
+                tokenListV3State.hiddenTokens = walletHiddenMints;
+                
+                // Auto-protect new tokens if auto-protect is enabled
+                await autoProtectNewTokens(filteredTokens, walletAddress);
+                
                 renderTokensV3();
                 hideLoadingStateV3();
                 
-                // Register these tokens with backend for price polling
-                console.log('[Dashboard] Calling registerDashboardTokens...');
-                registerDashboardTokens(walletAddress, tokens);
+                // Update real-time risk display for all tokens
+                if (window.realTimeRisk) {
+                    window.realTimeRisk.updateAllTokenRiskDisplays();
+                }
+                
+                // DISABLED: Backend token registration causing bug where all tokens are registered
+                // This was sending ALL displayed tokens (30+) to backend even if user only has 1
+                // Backend now discovers tokens through other means (webhooks, direct API calls)
+                /*
+                if (window.ENABLE_BACKEND_POLLING !== false) {
+                    console.log('[Dashboard] Attempting to register tokens with backend...');
+                    registerDashboardTokens(walletAddress, tokens).catch(err => {
+                        console.log('[Dashboard] Backend registration failed (non-critical):', err.message);
+                    });
+                }
+                */
                 return;
             } else {
-                console.log('No tokens found, loading mock data');
-                loadMockDataV3();
+                console.log('No tokens found');
+                showEmptyStateV3();
             }
         } else {
-            // Fallback to mock data if fetcher not available
-            console.log('Token fetcher not available, loading mock data...');
-            loadMockDataV3();
+            // Fallback to empty state if fetcher not available
+            console.log('Token fetcher not available');
+            showEmptyStateV3();
         }
         
     } catch (error) {
         console.error('Error in loadFromSupabaseV3:', error);
-        loadMockDataV3();
+        showEmptyStateV3();
     }
 }
 
@@ -536,11 +597,11 @@ async function registerDashboardTokens(walletAddress, tokens) {
             console.error('[Dashboard] Failed to register tokens:', response.status, await response.text());
         }
     } catch (error) {
-        console.error('[Dashboard] Error registering tokens:', error);
-        // Try to get more details about the error
+        // Only log if it's not a network error (backend not running is expected)
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            console.error('[Dashboard] Network error - backend may not be reachable at', window.BACKEND_URL || 'http://localhost:3001');
-            console.error('[Dashboard] Make sure the backend is running and CORS is configured');
+            console.log('[Dashboard] Backend not reachable - skipping token registration (non-critical)');
+        } else {
+            console.error('[Dashboard] Error registering tokens:', error);
         }
     }
 }
@@ -569,6 +630,20 @@ async function processTokensV3(tokens, isMockBalance = false) {
             .eq('mint', token.token_mint)
             .single();
         
+        // Get protection status
+        const walletAddress = localStorage.getItem('walletAddress');
+        let protectionData = null;
+        if (walletAddress) {
+            const { data: protection } = await supabaseClient
+                .from('protected_tokens')
+                .select('is_active, status, monitoring_active')
+                .eq('token_mint', token.token_mint)
+                .eq('wallet_address', walletAddress)
+                .eq('is_active', true)
+                .single();
+            protectionData = protection;
+        }
+        
         // Get latest price from history
         const { data: priceHistory } = await supabaseClient
             .from('token_price_history')
@@ -589,6 +664,9 @@ async function processTokensV3(tokens, isMockBalance = false) {
         // Get price (prefer latest_price > history > price_usd > price)
         const price = token.latest_price || priceHistory?.price || priceData.price_usd || priceData.price || token.price_usd || token.price || 0;
         
+        // Determine symbol early for logging & downstream usage
+        const symbol = metadata?.symbol || priceData.symbol || token.symbol || token.metadata_symbol || 'Unknown';
+        
         // Log for debugging
         console.log(`Token ${symbol}:`, {
             balance: balance,
@@ -604,8 +682,7 @@ async function processTokensV3(tokens, isMockBalance = false) {
         // Get image URL
         const imageUrl = metadata?.logo_uri || metadata?.logo_url || token.logo_uri || token.logo_url || '';
         
-        // Get symbol and name (prefer metadata > priceData > token)
-        const symbol = metadata?.symbol || priceData.symbol || token.symbol || token.metadata_symbol || 'Unknown';
+        // Get name (prefer metadata > priceData > token)
         const name = metadata?.name || priceData.name || token.name || token.metadata_name || symbol;
         
         return {
@@ -614,21 +691,27 @@ async function processTokensV3(tokens, isMockBalance = false) {
             name: name,
             balance: balance,
             price: price,
-            price_change_24h: priceData.change_24h || token.change_24h || 0,
-            liquidity_usd: token.latest_liquidity || priceHistory?.liquidity || priceData.liquidity || token.liquidity || 0,
+            price_change_24h: priceData.change_24h || token.change_24h || token.price_change_24h || 0,
+            liquidity_usd: token.latest_liquidity || priceHistory?.liquidity || priceData.liquidity || token.liquidity || token.current_liquidity || 0,
             volume_24h: token.latest_volume || priceHistory?.volume_24h || priceData.volume_24h || token.volume_24h || 0,
             market_cap: token.latest_market_cap || priceHistory?.market_cap || priceData.market_cap || token.market_cap || 0,
             value: value,
             image: imageUrl,
             risk_score: metadata?.risk_score || Math.floor(Math.random() * 100),
-            platform: priceData.platform || token.platform || 'unknown',
+            platform: priceData.platform || token.platform || token.data_source || 'unknown',
             created_at: priceData.created_at || token.created_at || priceData.updated_at || new Date().toISOString(),
-            holder_count: Math.floor(Math.random() * 10000),
-            creator_balance_pct: Math.random() * 10,
-            dev_sold_pct: Math.random() * 50,
-            honeypot_status: Math.random() > 0.8 ? 'warning' : 'safe',
-            lp_locked_pct: Math.random() * 100,
-            protected: Math.random() > 0.7
+            holder_count: token.holder_count || metadata?.holder_count || Math.floor(Math.random() * 10000),
+            creator_balance_pct: token.creator_balance_pct || Math.random() * 10,
+            dev_sold_pct: token.dev_sold_pct || Math.random() * 50,
+            honeypot_status: token.honeypot_status || (Math.random() > 0.8 ? 'warning' : 'safe'),
+            lp_locked_pct: token.lp_locked_pct || Math.random() * 100,
+            bonding_curve_progress: token.bonding_curve_progress || null,
+            sniper_count: token.sniper_count || null,
+            dev_wallet: token.dev_wallet || null,
+            data_source: token.data_source || 'unknown',
+            protected: protectionData?.is_active || false,
+            status: protectionData?.status || null,
+            monitoring_active: protectionData?.monitoring_active || false
         };
     }));
 }
@@ -737,15 +820,16 @@ function loadMockDataV3() {
         token.platform = token.platform || 'raydium';
         token.volume_24h = token.volume_24h || Math.random() * 1000000;
         token.market_cap = token.market_cap || token.liquidity_usd * 2;
-        token.holder_count = token.holder_count || Math.floor(Math.random() * 10000);
-        token.creator_balance_pct = token.creator_balance_pct || 5;
-        token.dev_activity_pct = token.dev_activity_pct || Math.random() * 30;
-        token.liquidity_change_1h = token.liquidity_change_1h || (Math.random() * 10 - 5);
-        token.liquidity_change_24h = token.liquidity_change_24h || (Math.random() * 20 - 10);
+        // Use real data only, no mock values
+        token.holder_count = token.holder_count || 0;
+        token.creator_balance_pct = token.creator_balance_pct || 0;
+        token.dev_activity_pct = token.dev_activity_pct || 0;
+        token.liquidity_change_1h = token.liquidity_change_1h || 0;
+        token.liquidity_change_24h = token.liquidity_change_24h || 0;
         token.age = token.age || { value: 30, unit: 'd', raw_days: 30 };
         token.risk_level = token.risk_level || (token.risk_score >= 60 ? 'HIGH' : token.risk_score >= 40 ? 'MODERATE' : 'LOW');
-        token.monitoring_active = true;
-        token.protected = true; // Show all demo tokens as protected
+        token.monitoring_active = token.protected || false; // Only monitor if protected
+        // Keep the protected status as defined in the mock data
     });
     
     tokenListV3State.tokens = mockTokens;
@@ -764,6 +848,9 @@ function renderTokensV3() {
     }
     
     hideLoadingStateV3();
+    
+    // Show the thead since we have tokens
+    document.getElementById('token-list-thead-v3').classList.remove('hidden');
     
     // Show demo banner if no wallet connected or using demo wallet
     const walletAddress = localStorage.getItem('walletAddress');
@@ -795,15 +882,106 @@ function renderTokensV3() {
         portfolioValueEl.textContent = '$' + formatNumberV3(totalValue);
     }
     
-    const protectedCountEl = document.getElementById('protected-count');
-    if (protectedCountEl) {
-        protectedCountEl.textContent = protectedCount;
+    // Only update protected count if we have a list-specific element
+    const protectedCountList = document.getElementById('protected-count-list-v3');
+    if (protectedCountList) {
+        protectedCountList.textContent = protectedCount;
     }
     
     const totalTokensEl = document.getElementById('total-tokens');
     if (totalTokensEl) {
         totalTokensEl.textContent = tokenListV3State.tokens.length;
     }
+    
+    // Apply auto-protect UI state to newly rendered buttons
+    if (typeof applyAutoProtectUIToTokens === 'function') {
+        applyAutoProtectUIToTokens();
+    }
+    
+    // Update protection counts after render
+    if (window.protectionToggle && window.protectionToggle.updateProtectionCounts) {
+        window.protectionToggle.updateProtectionCounts();
+    }
+    
+    // Dispatch events that tokens have been loaded/updated
+    document.dispatchEvent(new CustomEvent('tokenListUpdated', {
+        detail: { 
+            tokenCount: tokens.length
+        }
+    }));
+    
+    // Also dispatch tokensLoaded for compatibility
+    document.dispatchEvent(new CustomEvent('tokensLoaded', {
+        detail: { 
+            tokenCount: tokens.length
+        }
+    }));
+    
+    // Trigger counter refresh directly if available
+    if (window.refreshProtectedTokenCount) {
+        setTimeout(() => window.refreshProtectedTokenCount(), 50);
+    }
+    
+    // Trigger ML risk display update with a slight delay to ensure DOM is ready
+    setTimeout(() => {
+        console.log('[Token List] Triggering ML risk display update...');
+        if (window.mlRiskDisplay && window.mlRiskDisplay.loadMLRiskForVisibleTokens) {
+            window.mlRiskDisplay.loadMLRiskForVisibleTokens();
+        }
+    }, 100);
+}
+
+// JavaScript version of token display helper
+function renderTokenDisplayJS(token) {
+    // Check if token has pending metadata or placeholder data
+    const isPending = token.metadata_status === 'pending';
+    const hasPlaceholderData = (
+        token.symbol === 'TEST' || 
+        token.symbol === 'UNKNOWN' ||
+        token.symbol === 'TOKEN' ||
+        token.name === 'Test Token' ||
+        token.name === 'Unknown Token' ||
+        token.name === 'Demo Token' ||
+        (token.name && token.name.startsWith('Token '))
+    );
+    
+    if (isPending || hasPlaceholderData) {
+        // Return loading state with gradient animation
+        return `
+            <div class="flex items-center">
+                <div class="h-8 w-8 rounded-full mr-3 token-loader"></div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium token-loading-text">Loading...</span>
+                    </div>
+                    <div class="text-sm text-gray-500">Fetching metadata</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Normal token display
+    const symbol = token.symbol || 'UNKNOWN';
+    const name = token.name || 'Unknown Token';
+    const image = token.image || token.logo_uri || token.logo_url || null;
+    
+    return `
+        <div class="flex items-center">
+            ${image ? 
+                `<img alt="${symbol}" 
+                     class="h-8 w-8 rounded-full mr-3" 
+                     src="${image}"
+                     onerror="this.onerror=null; this.outerHTML='<div class=\\'h-8 w-8 rounded-full mr-3 token-loader\\'></div>';">` :
+                `<div class="h-8 w-8 rounded-full mr-3 token-loader"></div>`
+            }
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-medium">${symbol}</span>
+                </div>
+                <div class="text-sm text-gray-400">${name}</div>
+            </div>
+        </div>
+    `;
 }
 
 // Render single token row
@@ -815,36 +993,41 @@ function renderTokenRowV3(token) {
         value: token.value
     });
     
-    const riskBadge = getRiskBadgeV3(token.risk_score);
+    // Risk badge will be populated by real-time-risk.js
+    const riskBadge = `<div data-risk-badge="${token.token_mint}" class="risk-badge-container">
+        <span class="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium border rounded-md bg-gray-500/10 border-gray-500/20 text-gray-400">
+            <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Loading</span>
+        </span>
+    </div>`;
     const ageBadge = getAgeBadgeV3(token.age || token.launch_time);
     const priceBadge = getPriceBadgeV3(token.price, token.price_change_24h);
-    const liquidityBadge = getLiquidityBadgeV3(token.liquidity_usd, token.liquidity_change_1h);
-    const devBadge = getDevBadgeV3(token.dev_activity_pct);
+    const balanceBadge = getBalanceBadgeV3(token.original_balance || token.raw_balance || token.balance, token.symbol);
+    const devBadge = getDevBadgeV3(token);
     const honeypotBadge = getHoneypotBadgeV3(token.honeypot_status);
     const lpBadge = getLPBadgeV3(token.lp_locked_pct);
-    const protectionBadge = getProtectionBadgeV3(token.protected, token.monitoring_active);
+    const protectionBadge = getProtectionBadgeV3(token.protected, token.monitoring_active, token.status);
     const actionButtons = getActionButtonsV3(token);
     
     return `
-        <tr class="hover:bg-gray-800/50 transition-colors">
+        <tr class="hover:bg-gray-800/50 transition-colors" 
+            data-token-mint="${token.token_mint}"
+            data-liquidity="${token.liquidity_usd || 0}"
+            data-holders="${token.holder_count || 0}"
+            data-lp-locked="${token.lp_locked_pct || 0}"
+            data-dev-activity="${token.dev_activity_pct || 0}"
+            data-creator-balance="${token.creator_balance_pct || 0}"
+            data-price-change="${token.price_change_24h || 0}"
+            data-age='${token.age ? JSON.stringify(token.age) : ""}'>
             <td class="px-4 py-3 whitespace-nowrap">
-                <div class="flex items-center">
-                    <img alt="${token.symbol}" 
-                         class="h-8 w-8 rounded-full mr-3" 
-                         src="${token.image || '/assets/images/token-placeholder.svg'}"
-                         onerror="this.src='/assets/images/token-placeholder.svg'">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">${token.symbol}</span>
-                        </div>
-                        <div class="text-sm text-gray-400">${token.name}</div>
-                    </div>
-                </div>
+                ${renderTokenDisplayJS(token)}
             </td>
             <td class="px-4 py-3 text-center">${riskBadge}</td>
             <td class="px-4 py-3 text-center">${ageBadge}</td>
             <td class="px-4 py-3 text-right">${priceBadge}</td>
-            <td class="px-4 py-3 text-right">${liquidityBadge}</td>
+            <td class="px-4 py-3 text-right">${balanceBadge}</td>
             <td class="px-4 py-3 text-right">
                 <div title="Balance: ${formatNumberV3(token.balance)} ${token.symbol}">
                     ${tokenListV3State.showBalances ? 
@@ -869,28 +1052,6 @@ function renderTokenRowV3(token) {
 }
 
 // Badge generators
-function getRiskBadgeV3(riskScore) {
-    let color = 'blue';
-    let icon = 'shield';
-    let text = 'Low';
-    
-    if (riskScore >= 70) {
-        color = 'red';
-        icon = 'alert-triangle';
-        text = 'High';
-    } else if (riskScore >= 50) {
-        color = 'yellow';
-        icon = 'alert-circle';
-        text = 'Medium';
-    }
-    
-    return `
-        <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-${color}-500/10 border-${color}-500/20 border cursor-pointer transition-all hover:opacity-80">
-            ${getIconV3(icon, `w-3.5 h-3.5 text-${color}-400`)}
-            <span class="text-xs font-medium text-${color}-400">${text}</span>
-        </div>
-    `;
-}
 
 function getAgeBadgeV3(age) {
     if (!age) return '<span class="text-xs text-gray-500">-</span>';
@@ -957,22 +1118,28 @@ function getPriceBadgeV3(price, change24h) {
     `;
 }
 
-function getLiquidityBadgeV3(liquidity, change1h) {
-    const changeColor = !change1h ? 'gray' : change1h >= 0 ? 'green' : 'red';
-    const changeIcon = change1h >= 0 ? '+' : '';
-    const changeText = change1h ? `${changeIcon}${change1h.toFixed(1)}% 1h` : 'N/A';
+function getBalanceBadgeV3(balance, symbol) {
+    // Format balance number with appropriate precision
+    const formattedBalance = formatBalanceV3(balance);
     
     return `
         <div class="flex flex-col gap-1">
-            <span class="price-significant tracking-tight text-sm font-semibold text-gray-100">$${formatNumberV3(liquidity)}</span>
-            <div class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-${changeColor}-500/10 border-${changeColor}-500/20 border self-end whitespace-nowrap">
-                <span class="text-xs font-medium text-${changeColor}-400">${changeText}</span>
+            <span class="price-significant tracking-tight text-sm font-semibold text-gray-100">${formattedBalance}</span>
+            <div class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gray-500/10 border-gray-500/20 border self-end whitespace-nowrap">
+                <span class="text-xs font-medium text-gray-400">${symbol || 'TOKEN'}</span>
             </div>
         </div>
     `;
 }
 
-function getDevBadgeV3(devActivityPct) {
+function getDevBadgeV3(token) {
+    // Use 24h activity as primary metric, fallback to total
+    const devActivityPct = token.dev_activity_24h_pct || token.dev_activity_pct || 0;
+    const totalPct = token.dev_activity_pct_total || token.dev_activity_pct || 0;
+    const pct1h = token.dev_activity_1h_pct || 0;
+    const lastTx = token.last_dev_tx;
+    const devWallets = token.dev_wallets || [];
+    
     if (!devActivityPct && devActivityPct !== 0) {
         return '<span class="text-xs text-gray-500">-</span>';
     }
@@ -980,17 +1147,53 @@ function getDevBadgeV3(devActivityPct) {
     let color = 'green';
     let text = 'Low';
     
-    if (devActivityPct > 50) {
+    // Use 24h activity for thresholds
+    if (devActivityPct > 30) {
         color = 'red';
         text = 'High';
-    } else if (devActivityPct > 20) {
+    } else if (devActivityPct > 10) {
         color = 'yellow';
         text = 'Med';
     }
     
+    // Format last transaction time
+    let lastTxText = 'No recent activity';
+    if (lastTx) {
+        const timeDiff = Date.now() - new Date(lastTx).getTime();
+        const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+        if (hours < 1) {
+            lastTxText = 'Last tx: < 1h ago';
+        } else if (hours < 24) {
+            lastTxText = `Last tx: ${hours}h ago`;
+        } else {
+            const days = Math.floor(hours / 24);
+            lastTxText = `Last tx: ${days}d ago`;
+        }
+    }
+    
+    // Build tooltip content
+    const tooltipContent = `
+        <div class="text-xs">
+            <div class="font-semibold mb-1">Developer Activity</div>
+            <div>Total: ${totalPct.toFixed(1)}%</div>
+            <div>24h: ${devActivityPct.toFixed(1)}%</div>
+            <div>1h: ${pct1h.toFixed(1)}%</div>
+            <div class="mt-1">${lastTxText}</div>
+            ${devWallets.length > 1 ? `<div class="mt-1">${devWallets.length} dev wallets tracked</div>` : ''}
+        </div>
+    `.trim();
+    
     return `
-        <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-${color}-500/10 border-${color}-500/20 border">
-            <span class="text-xs font-medium text-${color}-400">${text}</span>
+        <div class="relative group">
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-${color}-500/10 border-${color}-500/20 border cursor-help">
+                <span class="text-xs font-medium text-${color}-400">${text}</span>
+                ${devActivityPct > 0 ? `<span class="text-xs text-${color}-400">(${devActivityPct.toFixed(0)}%)</span>` : ''}
+            </div>
+            <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-2 shadow-lg whitespace-nowrap">
+                    ${tooltipContent}
+                </div>
+            </div>
         </div>
     `;
 }
@@ -1031,7 +1234,17 @@ function getLPBadgeV3(lpLocked) {
     `;
 }
 
-function getProtectionBadgeV3(isProtected, monitoringActive) {
+function getProtectionBadgeV3(isProtected, monitoringActive, status) {
+    // Check if token is rugged first
+    if (status === 'RUGGED') {
+        return `
+            <div class="inline-flex items-center px-2 py-1 rounded-full bg-gray-800/50 text-gray-500 border border-gray-700/50">
+                ${getIconV3('shield', 'h-3 w-3 mr-1 opacity-30')}
+                <span class="text-xs">Not Protected</span>
+            </div>
+        `;
+    }
+    
     if (isProtected) {
         return `
             <div class="flex flex-col items-center gap-1">
@@ -1060,19 +1273,67 @@ function getProtectionBadgeV3(isProtected, monitoringActive) {
 }
 
 function getActionButtonsV3(token) {
+    const isProtected = token.protected;
+    const isNewlyAdded = token.is_newly_added || false;
+    const isRugged = token.status === 'RUGGED';
+    
+    // For newly added tokens, use a disabled state
+    let protectionButtonClass, protectionIconClass, protectionTitle, protectionLabel, tooltipText;
+    
+    if (isRugged) {
+        // Rugged token - show completely disabled state
+        protectionButtonClass = `relative group p-2 rounded-xl transition-all duration-300 
+           bg-black/30 border border-gray-700/30
+           cursor-not-allowed opacity-50`;
+        protectionIconClass = 'h-4 w-4 text-gray-600';
+        protectionTitle = 'Token has been rugged - protection disabled';
+        protectionLabel = 'Protection unavailable (rugged)';
+        tooltipText = 'This token has been rugged and cannot be protected';
+    } else if (isNewlyAdded && !isProtected) {
+        // Newly added token - show inactive/disabled state
+        protectionButtonClass = `relative group p-2 rounded-xl transition-all duration-300 
+           glass-card-enhanced bg-gray-800/40 border border-gray-700/30
+           cursor-not-allowed opacity-50`;
+        protectionIconClass = 'h-4 w-4 text-gray-500';
+        protectionTitle = 'Please wait - fetching token data...';
+        protectionLabel = 'Protection unavailable';
+        tooltipText = 'Protection will be available once token data is loaded';
+    } else if (isProtected) {
+        // Protected token
+        protectionButtonClass = `relative group p-2 rounded-xl transition-all duration-300 
+           bg-red-500/20 border-2 border-red-500/50 hover:bg-red-500/30 hover:border-red-500/70
+           cursor-pointer hover:scale-105 backdrop-blur-sm shadow-lg shadow-red-500/20`;
+        protectionIconClass = 'h-4 w-4 text-red-400 group-hover:text-red-300 transition-colors duration-200';
+        protectionTitle = 'Click to disable protection';
+        protectionLabel = 'Disable protection';
+        tooltipText = 'Click to disable protection';
+    } else {
+        // Not protected token (but not newly added)
+        protectionButtonClass = `relative group p-2 rounded-xl transition-all duration-300
+           glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50
+           cursor-pointer hover:scale-105 backdrop-blur-sm`;
+        protectionIconClass = 'h-4 w-4 text-gray-400 group-hover:text-gray-300 transition-colors duration-200';
+        protectionTitle = 'Click to enable protection';
+        protectionLabel = 'Enable protection';
+        tooltipText = 'Click to set up protection';
+    }
+    
     return `
         <div class="flex justify-center items-center space-x-1 min-w-fit">
             <div class="relative group inline-block">
-                <button class="
-                    relative group
-                    p-2
-                    rounded-xl transition-all duration-300
-                    glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50
-                    cursor-pointer hover:scale-105
-                    backdrop-blur-sm
-                " aria-label="Set up protection" title="Click to set up protection">
+                <button class="${protectionButtonClass}" 
+                        aria-label="${protectionLabel}" 
+                        title="${protectionTitle}"
+                        aria-pressed="${isProtected}"
+                        ${isRugged ? 'disabled' : 'data-protection-btn data-protect-button'}
+                        data-mint="${token.token_mint}"
+                        data-symbol="${token.symbol}"
+                        data-name="${token.name || token.symbol}"
+                        data-protected="${isProtected}"
+                        data-rugged="${isRugged}">
                     <div class="relative">
-                        ${getIconV3('shield', 'h-4 w-4 text-gray-400 group-hover:text-gray-300 transition-colors duration-200')}
+                        ${getIconV3('shield', protectionIconClass)}
+                        ${isProtected ? `<div class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>` : ''}
                     </div>
                 </button>
                 <div class="
@@ -1083,21 +1344,27 @@ function getActionButtonsV3(token) {
                     opacity-0 group-hover:opacity-100
                     transition-opacity duration-200
                 ">
-                    Click to set up protection
+                    ${tooltipText}
                     <div class="
                         absolute w-0 h-0 border-solid
                         top-full left-1/2 transform -translate-x-1/2 border-t-gray-900 border-t-4 border-x-transparent border-x-4
                     "></div>
                 </div>
             </div>
-            <button class="p-2 rounded-xl glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50 text-gray-400 hover:text-gray-300 transition-all duration-300 hover:scale-105 backdrop-blur-sm group" title="Configure protection">
+            ${isProtected && !isRugged ? `
+            <button class="p-2 rounded-xl glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50 text-gray-400 hover:text-gray-300 transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
+                    title="Configure protection settings"
+                    data-protection-settings
+                    data-mint="${token.token_mint}"
+                    data-symbol="${token.symbol}">
                 ${getIconV3('settings', 'h-4 w-4 transition-colors duration-200')}
             </button>
+            ` : ''}
             <a href="https://solscan.io/token/${token.token_mint}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-xl glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50 text-gray-400 hover:text-gray-300 transition-all duration-300 hover:scale-105 backdrop-blur-sm group inline-block" title="View on Solscan">
                 ${getIconV3('arrow-up-right', 'h-4 w-4 transition-colors duration-200')}
             </a>
-            <button class="p-2 rounded-xl glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50 text-gray-400 hover:text-red-400 transition-all duration-300 hover:scale-105 backdrop-blur-sm group" title="Hide token">
-                ${getIconV3('eye-off', 'h-4 w-4 transition-colors duration-200')}
+            <button onclick="hideTokenV3('${token.token_mint}', '${token.symbol}')" class="p-2 rounded-xl glass-card-enhanced hover:bg-gray-800/60 border border-gray-700/50 hover:border-gray-600/50 text-gray-400 hover:text-red-400 transition-all duration-300 hover:scale-105 backdrop-blur-sm group" title="Remove token from wallet">
+                ${getIconV3('trash-2', 'h-4 w-4 transition-colors duration-200')}
             </button>
         </div>
     `;
@@ -1147,6 +1414,28 @@ function formatPriceV3(price) {
     }
 }
 
+function formatBalanceV3(balance) {
+    // Handle null/undefined
+    if (balance === null || balance === undefined) {
+        return '0';
+    }
+    
+    // If it's already a string, return as-is to preserve all decimal places
+    if (typeof balance === 'string') {
+        return balance === '' || balance === '0' ? '0' : balance;
+    }
+    
+    // If it's a number, convert to string but preserve all precision
+    // Use toFixed with high precision to avoid scientific notation
+    if (typeof balance === 'number') {
+        if (balance === 0) return '0';
+        // Use enough decimal places to preserve precision, then remove trailing zeros
+        return balance.toFixed(20).replace(/\.?0+$/, '');
+    }
+    
+    return '0';
+}
+
 function getIconV3(name, className = '') {
     const icons = {
         'shield': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield ${className}"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>`,
@@ -1160,7 +1449,8 @@ function getIconV3(name, className = '') {
         'unlock': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-unlock ${className}"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`,
         'settings': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings ${className}"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
         'arrow-up-right': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right ${className}"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg>`,
-        'eye-off': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off ${className}"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`
+        'eye-off': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off ${className}"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`,
+        'info': `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info ${className}"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>`
     };
     return icons[name] || '';
 }
@@ -1170,6 +1460,7 @@ function showEmptyStateV3() {
     document.getElementById('loading-state-v3').classList.add('hidden');
     document.getElementById('empty-state-v3').classList.remove('hidden');
     document.getElementById('token-list-tbody-v3').innerHTML = '';
+    document.getElementById('token-list-thead-v3').classList.add('hidden');
 }
 
 function hideLoadingStateV3() {
@@ -1617,7 +1908,7 @@ function updateTokenProtectionV3(protectionData) {
         const row = tbody.children[tokenIndex];
         const protectionCell = row.children[11];
         if (protectionCell) {
-            protectionCell.innerHTML = getProtectionBadgeV3(token.protected, token.monitoring_active);
+            protectionCell.innerHTML = getProtectionBadgeV3(token.protected, token.monitoring_active, token.status);
         }
     }
     
@@ -1645,14 +1936,634 @@ function updateTotalsV3() {
         portfolioValueEl.textContent = '$' + formatNumberV3(totalValue);
     }
     
-    const protectedCountEl = document.getElementById('protected-count');
-    if (protectedCountEl) {
-        protectedCountEl.textContent = protectedCount;
+    // Only update protected count if we have a list-specific element
+    const protectedCountList = document.getElementById('protected-count-list-v3');
+    if (protectedCountList) {
+        protectedCountList.textContent = protectedCount;
     }
     
     const totalTokensEl = document.getElementById('total-tokens');
     if (totalTokensEl) {
         totalTokensEl.textContent = tokenListV3State.tokens.length;
     }
+    
+    // Update protection counts after render
+    if (window.protectionToggle && window.protectionToggle.updateProtectionCounts) {
+        window.protectionToggle.updateProtectionCounts();
+    }
+    
+    // Dispatch event that tokens have been loaded/updated
+    document.dispatchEvent(new CustomEvent('tokenListUpdated', {
+        detail: { 
+            tokenCount: window.tokenStateV3?.tokens?.length || 0
+        }
+    }));
 }
+
+// Delete token function (renamed from hideTokenV3)
+async function hideTokenV3(tokenMint, tokenSymbol) {
+    const walletAddress = localStorage.getItem('walletAddress');
+    if (!walletAddress) return;
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to remove ${tokenSymbol} from your wallet? This will delete it from the database.`)) {
+        return;
+    }
+    
+    try {
+        // Delete from database
+        const { error } = await supabaseClient
+            .from('wallet_tokens')
+            .delete()
+            .eq('wallet_address', walletAddress)
+            .eq('token_mint', tokenMint);
+            
+        if (error) {
+            console.error('Error deleting token:', error);
+            showNotification(`Failed to delete ${tokenSymbol}: ${error.message}`, 'error');
+            return;
+        }
+        
+        // Also check if token is protected and remove protection
+        const { data: protectedToken } = await supabaseClient
+            .from('protected_tokens')
+            .select('*')
+            .eq('wallet_address', walletAddress)
+            .eq('token_mint', tokenMint)
+            .single();
+            
+        if (protectedToken) {
+            // Remove protection
+            await supabaseClient
+                .from('protected_tokens')
+                .delete()
+                .eq('wallet_address', walletAddress)
+                .eq('token_mint', tokenMint);
+        }
+        
+        // Remove from current tokens in UI
+        tokenListV3State.tokens = tokenListV3State.tokens.filter(t => t.token_mint !== tokenMint);
+        
+        // Re-render tokens
+        renderTokensV3();
+        
+        // Update protected count if needed
+        if (window.refreshProtectedTokenCount) {
+            window.refreshProtectedTokenCount();
+        }
+        
+        // Show notification
+        showNotification(`${tokenSymbol} has been removed from your wallet`, 'success');
+        
+    } catch (error) {
+        console.error('Error in hideTokenV3:', error);
+        showNotification(`Failed to remove ${tokenSymbol}`, 'error');
+    }
+}
+
+// Show notification helper
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-full ${
+        type === 'success' ? 'bg-green-500/20 border border-green-500/30 text-green-400' :
+        type === 'error' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
+        'bg-blue-500/20 border border-blue-500/30 text-blue-400'
+    }`;
+    notification.innerHTML = `
+        <div class="flex items-center gap-2">
+            ${type === 'success' ? getIconV3('check-circle', 'w-5 h-5') :
+              type === 'error' ? getIconV3('x-circle', 'w-5 h-5') :
+              getIconV3('info', 'w-5 h-5')}
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Add to DOM
+    document.body.appendChild(notification);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        notification.classList.remove('translate-y-full');
+        notification.classList.add('translate-y-0');
+    });
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('translate-y-0');
+        notification.classList.add('translate-y-full');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Initialize auto-protect toggle
+function initializeAutoProtectToggle() {
+    const autoProtectToggle = document.getElementById('auto-protect-v3');
+    if (!autoProtectToggle) return;
+    
+    // Load auto-protect status from Supabase for current wallet
+    loadAutoProtectStatus();
+    
+    // Set initial UI state
+    updateAutoProtectUI();
+    
+    // Add event listener
+    autoProtectToggle.addEventListener('change', handleAutoProtectToggle);
+    
+    // Subscribe to realtime updates for auto-protect status
+    subscribeToAutoProtectUpdates();
+}
+
+// Load auto-protect status from Supabase
+async function loadAutoProtectStatus() {
+    const walletAddress = localStorage.getItem('walletAddress');
+    if (!walletAddress) return;
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('wallet_auto_protection')
+            .select('enabled')
+            .eq('wallet_address', walletAddress)
+            .single();
+        
+        if (data && !error) {
+            tokenListV3State.autoProtectEnabled = data.enabled;
+            localStorage.setItem('autoProtectEnabled', JSON.stringify(data.enabled));
+            updateAutoProtectUI();
+        }
+    } catch (error) {
+        console.log('No auto-protect settings found for wallet, using default (false)');
+    }
+}
+
+// Handle auto-protect toggle change
+async function handleAutoProtectToggle(event) {
+    const enabled = event.target.checked;
+    const walletAddress = localStorage.getItem('walletAddress');
+    
+    if (!walletAddress) {
+        showNotification('Please connect your wallet first', 'error');
+        event.target.checked = false;
+        return;
+    }
+    
+    if (tokenListV3State.autoProtectProcessing) {
+        event.target.checked = !enabled; // Revert the change
+        return;
+    }
+    
+    tokenListV3State.autoProtectProcessing = true;
+    
+    try {
+        // Update local state immediately for UI responsiveness
+        tokenListV3State.autoProtectEnabled = enabled;
+        localStorage.setItem('autoProtectEnabled', JSON.stringify(enabled));
+        updateAutoProtectUI();
+        
+        // Show processing notification
+        showNotification(
+            enabled ? 'Enabling auto-protect...' : 'Disabling auto-protect...', 
+            'info'
+        );
+        
+        // Call backend bulk toggle API
+        const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/auto-protection/bulk-toggle/${walletAddress}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ enabled })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(data.message, 'success');
+            
+            // Immediately update all tokens' protection state in UI
+            if (enabled) {
+                // When enabling auto-protect, mark ALL tokens as protected
+                console.log('🛡️ Auto-Protect ON: Protecting all tokens in UI');
+                tokenListV3State.tokens.forEach(token => {
+                    console.log(`- Protecting ${token.symbol}`);
+                    token.protected = true;
+                    token.monitoring_active = true;
+                });
+            } else {
+                // When disabling, unprotect all tokens
+                console.log('🛡️ Auto-Protect OFF: Unprotecting all tokens in UI');
+                tokenListV3State.tokens.forEach(token => {
+                    console.log(`- Unprotecting ${token.symbol}`);
+                    token.protected = false;
+                    token.monitoring_active = false;
+                });
+            }
+            
+            // Re-render to show updated protection states
+            console.log('Re-rendering token list with updated protection states...');
+            renderTokensV3();
+            
+            // Also refresh from backend after a short delay to sync
+            setTimeout(() => {
+                refreshTokensV3();
+            }, 2000);
+        } else {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+    } catch (error) {
+        console.error('Error toggling auto-protection:', error);
+        
+        // Revert state on error
+        tokenListV3State.autoProtectEnabled = !enabled;
+        localStorage.setItem('autoProtectEnabled', JSON.stringify(!enabled));
+        event.target.checked = !enabled;
+        updateAutoProtectUI();
+        
+        showNotification('Failed to update auto-protection', 'error');
+    } finally {
+        tokenListV3State.autoProtectProcessing = false;
+    }
+}
+
+// Update auto-protect UI based on current state
+function updateAutoProtectUI() {
+    const autoProtectToggle = document.getElementById('auto-protect-v3');
+    if (!autoProtectToggle) return;
+    
+    const toggleContainer = autoProtectToggle.parentElement;
+    const toggleTrack = toggleContainer.querySelector('div:last-child');
+    const toggleHandle = toggleTrack.querySelector('div');
+    
+    // Update checkbox state
+    autoProtectToggle.checked = tokenListV3State.autoProtectEnabled;
+    
+    // Update visual state
+    if (tokenListV3State.autoProtectEnabled) {
+        toggleTrack.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+        toggleTrack.classList.add('bg-green-600', 'hover:bg-green-500');
+        toggleHandle.classList.remove('translate-x-0');
+        toggleHandle.classList.add('translate-x-5');
+    } else {
+        toggleTrack.classList.remove('bg-green-600', 'hover:bg-green-500');
+        toggleTrack.classList.add('bg-gray-700', 'hover:bg-gray-600');
+        toggleHandle.classList.remove('translate-x-5');
+        toggleHandle.classList.add('translate-x-0');
+    }
+    
+    // Update processing state
+    if (tokenListV3State.autoProtectProcessing) {
+        autoProtectToggle.disabled = true;
+        toggleContainer.style.opacity = '0.6';
+    } else {
+        autoProtectToggle.disabled = false;
+        toggleContainer.style.opacity = '1';
+    }
+    
+    // Update individual token button states
+    applyAutoProtectUIToTokens();
+}
+
+// Auto-protect new tokens if auto-protect is enabled
+async function autoProtectNewTokens(tokens, walletAddress) {
+    if (!tokenListV3State.autoProtectEnabled || !walletAddress) {
+        return;
+    }
+    
+    console.log('🛡️ Auto-protect is enabled, checking for new tokens to protect...');
+    
+    // Filter tokens that should be auto-protected
+    const tokensToProtect = tokens.filter(token => {
+        // Only protect tokens with reasonable value (>$10) to avoid spam tokens
+        const value = token.value || 0;
+        const isUnprotected = !token.protected;
+        const hasMinValue = value > 10;
+        
+        return isUnprotected && hasMinValue;
+    });
+    
+    if (tokensToProtect.length === 0) {
+        console.log('No new tokens to auto-protect');
+        return;
+    }
+    
+    console.log(`Auto-protecting ${tokensToProtect.length} new tokens:`, tokensToProtect.map(t => t.symbol));
+    
+    // Protect each token via backend
+    const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+    const protectionPromises = tokensToProtect.map(async (token) => {
+        try {
+            const response = await fetch(`${backendUrl}/api/protection/protect`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    walletAddress: walletAddress,
+                    tokenMint: token.token_mint,
+                    settings: {
+                        priceDropThreshold: 20,
+                        liquidityDropThreshold: 30,
+                        gasBoost: 1.5,
+                        slippageTolerance: 5,
+                        autoSell: true
+                    },
+                    tokenInfo: {
+                        symbol: token.symbol,
+                        name: token.name,
+                        currentPrice: token.price
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                console.log(`✅ Auto-protected ${token.symbol}`);
+                // Update local state
+                token.protected = true;
+                token.monitoring_active = true;
+                return true;
+            } else {
+                console.error(`❌ Failed to auto-protect ${token.symbol}:`, await response.text());
+                return false;
+            }
+        } catch (error) {
+            console.error(`❌ Error auto-protecting ${token.symbol}:`, error);
+            return false;
+        }
+    });
+    
+    // Wait for all protection attempts to complete
+    const results = await Promise.all(protectionPromises);
+    const successCount = results.filter(Boolean).length;
+    
+    if (successCount > 0) {
+        showNotification(`Auto-protected ${successCount} new tokens`, 'success');
+    }
+}
+
+// Apply auto-protect UI state to individual token buttons
+function applyAutoProtectUIToTokens() {
+    const protectButtons = document.querySelectorAll('[data-protect-button]');
+    
+    protectButtons.forEach(button => {
+        const isAutoProtectEnabled = tokenListV3State.autoProtectEnabled;
+        const isTokenProtected = button.getAttribute('data-protected') === 'true';
+        
+        if (isAutoProtectEnabled) {
+            // When auto-protect is enabled, disable manual control but show current state
+            button.disabled = true;
+            button.classList.add('shield-button-disabled', 'shield-tooltip');
+            
+            if (isTokenProtected) {
+                button.classList.add('shield-button-auto-protected');
+            }
+            
+            if (isTokenProtected) {
+                button.setAttribute('data-tooltip', 'Auto-Protected - disable Auto-Protect to manage manually');
+            } else {
+                button.setAttribute('data-tooltip', 'Will be auto-protected when value exceeds $10 - disable Auto-Protect to manage manually');
+            }
+        } else {
+            // When auto-protect is disabled, restore normal functionality
+            button.disabled = false;
+            button.classList.remove('shield-button-disabled', 'shield-tooltip', 'shield-button-auto-protected');
+            
+            if (isTokenProtected) {
+                button.title = 'Click to disable protection';
+            } else {
+                button.title = 'Click to enable protection';
+            }
+        }
+    });
+}
+
+// Subscribe to realtime updates for auto-protect status
+function subscribeToAutoProtectUpdates() {
+    const walletAddress = localStorage.getItem('walletAddress');
+    if (!walletAddress || !window.supabaseClient) return;
+    
+    console.log('📡 Subscribing to auto-protect realtime updates...');
+    
+    // Subscribe to changes in wallet_auto_protection table for this wallet
+    const subscription = window.supabaseClient
+        .channel(`auto-protect-${walletAddress}`)
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'wallet_auto_protection',
+                filter: `wallet_address=eq.${walletAddress}`
+            },
+            (payload) => {
+                console.log('🔄 Auto-protect status changed:', payload);
+                
+                if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                    const newEnabled = payload.new.enabled;
+                    
+                    // Only update if the state actually changed
+                    if (newEnabled !== tokenListV3State.autoProtectEnabled) {
+                        console.log(`🔄 Syncing auto-protect state: ${newEnabled ? 'ON' : 'OFF'}`);
+                        
+                        // Update local state
+                        tokenListV3State.autoProtectEnabled = newEnabled;
+                        localStorage.setItem('autoProtectEnabled', JSON.stringify(newEnabled));
+                        
+                        // Update UI
+                        updateAutoProtectUI();
+                        
+                        // Show notification
+                        showNotification(
+                            `Auto-protect ${newEnabled ? 'enabled' : 'disabled'} from another device`,
+                            'info'
+                        );
+                        
+                        // If enabled from another device, update all tokens to show as protected
+                        if (newEnabled) {
+                            tokenListV3State.tokens.forEach(token => {
+                                token.protected = true;
+                                token.monitoring_active = true;
+                            });
+                        } else {
+                            tokenListV3State.tokens.forEach(token => {
+                                token.protected = false;
+                                token.monitoring_active = false;
+                            });
+                        }
+                        
+                        // Re-render tokens to show updated states
+                        renderTokensV3();
+                    }
+                }
+            }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Subscribed to auto-protect realtime updates');
+            }
+        });
+    
+    // Store subscription for cleanup if needed
+    window.autoProtectSubscription = subscription;
+}
+
+// Cleanup auto-protect subscription (call when wallet changes)
+function cleanupAutoProtectSubscription() {
+    if (window.autoProtectSubscription) {
+        console.log('🧹 Cleaning up auto-protect subscription');
+        window.autoProtectSubscription.unsubscribe();
+        window.autoProtectSubscription = null;
+    }
+}
+
+// Risk tooltip functionality
+let riskTooltipTimeout = null;
+let riskTooltip = null;
+
+function showRiskTooltip(element, event) {
+    // Clear any existing timeout
+    if (riskTooltipTimeout) {
+        clearTimeout(riskTooltipTimeout);
+    }
+    
+    const tokenMint = element.closest('tr').querySelector('[data-token-mint]')?.getAttribute('data-token-mint');
+    const token = tokenListV3State.tokens.find(t => t.token_mint === tokenMint);
+    
+    if (!token) return;
+    
+    // Create tooltip element if it doesn't exist
+    if (!riskTooltip) {
+        riskTooltip = document.createElement('div');
+        riskTooltip.className = 'fixed z-[100] bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 min-w-[320px] max-w-[400px] transition-opacity duration-200';
+        riskTooltip.style.opacity = '0';
+        document.body.appendChild(riskTooltip);
+    }
+    
+    // Build tooltip content
+    const riskColor = token.risk_score >= 80 ? 'text-red-400' : 
+                      token.risk_score >= 60 ? 'text-orange-400' :
+                      token.risk_score >= 40 ? 'text-yellow-400' :
+                      token.risk_score >= 20 ? 'text-blue-400' : 'text-green-400';
+    
+    const autoSellStatus = token.protected && token.risk_level === 'CRITICAL' ? 
+        '<div class="flex items-center gap-2 text-red-400 font-medium"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>Auto-sell will trigger!</div>' : '';
+    
+    riskTooltip.innerHTML = `
+        <div class="space-y-3">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <h4 class="text-sm font-semibold text-gray-200">Risk Analysis</h4>
+                <span class="text-xs text-gray-500">${token.symbol}</span>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Risk Score</div>
+                    <div class="text-lg font-bold ${riskColor}">${token.risk_score || 0}/100</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Risk Level</div>
+                    <div class="text-sm font-medium ${riskColor}">${token.risk_level || 'UNKNOWN'}</div>
+                </div>
+            </div>
+            
+            <div class="space-y-2 pt-2 border-t border-gray-800">
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">Holders</span>
+                    <span class="font-medium ${token.holder_count < 10 ? 'text-red-400' : 'text-gray-200'}">${formatNumberV3(token.holder_count || 0)}</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">LP Locked</span>
+                    <span class="font-medium ${token.lp_locked_pct < 50 ? 'text-yellow-400' : 'text-green-400'}">${(token.lp_locked_pct || 0).toFixed(1)}%</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">Dev Wallet</span>
+                    <span class="font-medium ${token.creator_balance_pct > 20 ? 'text-red-400' : 'text-green-400'}">${(token.creator_balance_pct || 0).toFixed(1)}%</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">Honeypot</span>
+                    <span class="font-medium ${token.honeypot_status === 'warning' ? 'text-red-400' : token.honeypot_status === 'safe' ? 'text-green-400' : 'text-gray-400'}">${token.honeypot_status || 'Unknown'}</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">Liquidity 24h</span>
+                    <span class="font-medium ${token.liquidity_change_24h < -10 ? 'text-red-400' : 'text-gray-200'}">${token.liquidity_change_24h > 0 ? '+' : ''}${(token.liquidity_change_24h || 0).toFixed(1)}%</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-400">Dev Activity</span>
+                    <span class="font-medium ${token.dev_activity_24h_pct > 30 ? 'text-red-400' : 'text-green-400'}">${(token.dev_activity_24h_pct || 0).toFixed(1)}%</span>
+                </div>
+            </div>
+            
+            ${token.warnings && token.warnings.length > 0 ? `
+                <div class="pt-2 border-t border-gray-800">
+                    <div class="text-xs text-gray-500 mb-1">Warnings</div>
+                    <ul class="text-xs text-yellow-400 space-y-1">
+                        ${token.warnings.map(w => `<li>• ${w}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            ${autoSellStatus ? `<div class="pt-2 border-t border-gray-800">${autoSellStatus}</div>` : ''}
+            
+            <div class="pt-2 border-t border-gray-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-500">Protection Status</span>
+                    <span class="text-xs font-medium ${token.protected ? 'text-green-400' : 'text-gray-400'}">
+                        ${token.protected ? '🛡️ Protected' : 'Not Protected'}
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Position tooltip
+    const rect = element.getBoundingClientRect();
+    const tooltipWidth = 350;
+    const tooltipHeight = 400; // Approximate height
+    
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    let top = rect.bottom + 10;
+    
+    // Adjust if tooltip goes off screen
+    if (left < 10) left = 10;
+    if (left + tooltipWidth > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipWidth - 10;
+    }
+    
+    if (top + tooltipHeight > window.innerHeight - 10) {
+        top = rect.top - tooltipHeight - 10;
+    }
+    
+    riskTooltip.style.left = `${left}px`;
+    riskTooltip.style.top = `${top}px`;
+    
+    // Show tooltip with fade in
+    requestAnimationFrame(() => {
+        riskTooltip.style.opacity = '1';
+    });
+}
+
+function hideRiskTooltip() {
+    if (riskTooltipTimeout) {
+        clearTimeout(riskTooltipTimeout);
+    }
+    
+    riskTooltipTimeout = setTimeout(() => {
+        if (riskTooltip) {
+            riskTooltip.style.opacity = '0';
+            setTimeout(() => {
+                if (riskTooltip && riskTooltip.parentNode) {
+                    riskTooltip.parentNode.removeChild(riskTooltip);
+                    riskTooltip = null;
+                }
+            }, 200);
+        }
+    }, 100);
+}
+
+// Expose functions globally for other modules
+window.cleanupAutoProtectSubscription = cleanupAutoProtectSubscription;
+window.renderTokenRowV3 = renderTokenRowV3;
+window.tokenListV3State = tokenListV3State;
+window.showRiskTooltip = showRiskTooltip;
+window.hideRiskTooltip = hideRiskTooltip;
+window.refreshTokensV3 = refreshTokensV3;
 </script>

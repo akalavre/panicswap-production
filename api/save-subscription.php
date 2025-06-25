@@ -1,183 +1,167 @@
 <?php
-/**
- * Save Subscription Endpoint
- * Handles saving subscription details after successful payment
- */
-
-// Load configuration
-require_once dirname(__DIR__) . '/config.php';
-require_once __DIR__ . '/supabase-config.php';
-
-// Set JSON response header
 header('Content-Type: application/json');
-
-// CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Headers: Content-Type');
 
-// Handle preflight
+// Handle OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-// Only allow POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
-    exit();
+// For now, handle Supabase operations with direct API calls
+define('SUPABASE_URL', 'https://cfficjjdhgqwqprfhlrj.supabase.co');
+define('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NjI0OTcsImV4cCI6MjA2NDUzODQ5N30.IB-rLhiadGguYCTAZoiI60451xLLZ9M23OpfvsBt0mA');
+
+function supabaseRequest($method, $endpoint, $data = null, $isQuery = false) {
+    $url = SUPABASE_URL . '/rest/v1' . $endpoint;
+    
+    $headers = [
+        'apikey: ' . SUPABASE_ANON_KEY,
+        'Authorization: Bearer ' . SUPABASE_ANON_KEY,
+        'Content-Type: application/json',
+        'Prefer: return=representation'
+    ];
+    
+    $curl = curl_init();
+    
+    curl_setopt($curl, CURLOPT_URL, $url);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    
+    if ($method !== 'GET') {
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
+        if ($data) {
+            curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+        }
+    }
+    
+    $response = curl_exec($curl);
+    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+    
+    $result = json_decode($response, true);
+    
+    if ($httpCode >= 400) {
+        return ['error' => $result];
+    }
+    
+    return ['data' => $result];
 }
 
-// Get input data
+// Get request data
 $input = json_decode(file_get_contents('php://input'), true);
 
-// Validate required fields
-$requiredFields = ['wallet_address', 'plan_type', 'payment_method', 'amount', 'currency'];
-foreach ($requiredFields as $field) {
-    if (!isset($input[$field]) || empty($input[$field])) {
-        http_response_code(400);
-        echo json_encode(['error' => "Missing required field: $field"]);
-        exit();
-    }
-}
-
-// Validate plan type
-$validPlans = ['basic', 'pro', 'enterprise'];
-if (!in_array($input['plan_type'], $validPlans)) {
+if (!$input || !isset($input['wallet']) || !isset($input['plan'])) {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid plan type']);
+    echo json_encode(['success' => false, 'message' => 'Missing required fields']);
     exit();
 }
 
-// Validate payment method
-$validPaymentMethods = ['crypto', 'stripe'];
-if (!in_array($input['payment_method'], $validPaymentMethods)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid payment method']);
-    exit();
-}
-
-// Validate wallet address format (basic Solana address validation)
-if (!preg_match('/^[1-9A-HJ-NP-Za-km-z]{32,44}$/', $input['wallet_address'])) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid wallet address format']);
-    exit();
-}
-
-// Initialize Supabase client with service key for write operations
-$supabase = new SupabaseClient(true);
+$wallet = $input['wallet'];
+$plan = $input['plan'];
+$amount = $input['amount'] ?? 0;
+$currency = $input['currency'] ?? 'SOL';
+$txSignature = $input['txSignature'] ?? null;
+$status = $input['status'] ?? 'active';
 
 try {
-    // Prepare subscription data
-    $subscriptionData = [
-        'wallet_address' => $input['wallet_address'],
-        'plan_type' => $input['plan_type'],
-        'payment_method' => $input['payment_method'],
-        'amount' => floatval($input['amount']),
-        'currency' => strtoupper($input['currency']),
-        'status' => 'pending' // Default status
-    ];
+    // First, check if user exists
+    $userResponse = supabaseRequest('GET', "/users?wallet_address=eq.$wallet", null, true);
     
-    // Add payment method specific fields
-    if ($input['payment_method'] === 'crypto' && isset($input['transaction_signature'])) {
-        $subscriptionData['transaction_signature'] = $input['transaction_signature'];
-        $subscriptionData['status'] = 'active'; // Crypto payments are active immediately after verification
-    } elseif ($input['payment_method'] === 'stripe') {
-        if (isset($input['stripe_session_id'])) {
-            $subscriptionData['stripe_session_id'] = $input['stripe_session_id'];
-        }
-        if (isset($input['stripe_customer_id'])) {
-            $subscriptionData['stripe_customer_id'] = $input['stripe_customer_id'];
-        }
-    }
-    
-    // Set expiration date based on plan
-    $expirationDays = [
-        'basic' => 30,
-        'pro' => 30,
-        'enterprise' => 30
-    ];
-    
-    $expiresAt = new DateTime();
-    $expiresAt->add(new DateInterval('P' . $expirationDays[$input['plan_type']] . 'D'));
-    $subscriptionData['expires_at'] = $expiresAt->format('c');
-    
-    // Set plan features
-    $features = [
-        'basic' => [
-            'max_tokens' => 5,
-            'auto_protection' => true,
-            'priority_support' => false,
-            'advanced_analytics' => false
-        ],
-        'pro' => [
-            'max_tokens' => 20,
-            'auto_protection' => true,
-            'priority_support' => true,
-            'advanced_analytics' => true,
-            'custom_alerts' => true
-        ],
-        'enterprise' => [
-            'max_tokens' => -1, // unlimited
-            'auto_protection' => true,
-            'priority_support' => true,
-            'advanced_analytics' => true,
-            'custom_alerts' => true,
-            'api_access' => true,
-            'dedicated_support' => true
-        ]
-    ];
-    
-    $subscriptionData['features'] = json_encode($features[$input['plan_type']]);
-    
-    // First, deactivate any existing active subscriptions for this wallet
-    $existingSubscriptions = $supabase->query('subscriptions', [
-        'wallet_address' => 'eq.' . $input['wallet_address'],
-        'status' => 'eq.active'
-    ]);
-    
-    if (!empty($existingSubscriptions)) {
-        foreach ($existingSubscriptions as $existing) {
-            $supabase->update('subscriptions', $existing['id'], ['status' => 'expired']);
-        }
-    }
-    
-    // Insert new subscription
-    $result = $supabase->insert('subscriptions', $subscriptionData);
-    
-    if ($result === null) {
-        throw new Exception('Failed to save subscription');
-    }
-    
-    // Log payment in history
-    if (!empty($result) && isset($result[0]['id'])) {
-        $paymentHistoryData = [
-            'subscription_id' => $result[0]['id'],
-            'wallet_address' => $input['wallet_address'],
-            'event_type' => 'subscription_created',
-            'payment_method' => $input['payment_method'],
-            'amount' => floatval($input['amount']),
-            'currency' => strtoupper($input['currency']),
-            'transaction_data' => json_encode($input)
+    $userId = null;
+    if (!empty($userResponse['data'])) {
+        $userId = $userResponse['data'][0]['id'];
+    } else {
+        // Create user if doesn't exist
+        $createUserData = [
+            'wallet_address' => $wallet,
+            'created_at' => date('c')
         ];
         
-        $supabase->insert('payment_history', $paymentHistoryData);
+        $createUserResponse = supabaseRequest('POST', '/users', $createUserData);
+        if (!empty($createUserResponse['data'][0]['id'])) {
+            $userId = $createUserResponse['data'][0]['id'];
+        }
     }
     
-    // Return success response
-    http_response_code(201);
+    if (!$userId) {
+        throw new Exception('Failed to get or create user');
+    }
+    
+    // Cancel any existing active subscriptions
+    $existingSubsResponse = supabaseRequest('GET', "/subscriptions?user_id=eq.$userId&status=eq.active", null, true);
+    
+    if (!empty($existingSubsResponse['data'])) {
+        foreach ($existingSubsResponse['data'] as $sub) {
+            $updateData = ['status' => 'cancelled', 'cancelled_at' => date('c')];
+            supabaseRequest('PATCH', "/subscriptions?id=eq.{$sub['id']}", $updateData);
+        }
+    }
+    
+    // Calculate next payment date (7 days from now for weekly subscription)
+    $nextPaymentDate = date('c', strtotime('+7 days'));
+    
+    // Determine payment method and billing cycle
+    $paymentMethod = $currency === 'USD' ? 'stripe' : 'sol';
+    $billingCycle = $paymentMethod === 'stripe' ? 'monthly' : 'weekly';
+    
+    // Calculate next payment date
+    $nextPaymentDate = $paymentMethod === 'stripe' 
+        ? date('c', strtotime('+1 month'))
+        : date('c', strtotime('+7 days'));
+    
+    // Create new subscription
+    $subscriptionData = [
+        'user_id' => $userId,
+        'plan' => strtolower($plan),
+        'status' => $status,
+        'amount' => (float)$amount,
+        'amount_sol' => $currency === 'SOL' ? (float)$amount : null,
+        'currency' => $currency,
+        'billing_cycle' => $billingCycle,
+        'payment_method' => $paymentMethod,
+        'payment_wallet' => $wallet,
+        'tx_signature' => $txSignature,
+        'next_payment_date' => $nextPaymentDate,
+        'auto_renew' => isset($input['auto_renew']) ? $input['auto_renew'] : ($paymentMethod === 'sol'),
+        'is_hot_wallet' => isset($input['is_hot_wallet']) ? $input['is_hot_wallet'] : false,
+        'created_at' => date('c'),
+        'updated_at' => date('c')
+    ];
+    
+    // Add Stripe-specific fields if present
+    if (isset($input['stripe_customer_id'])) {
+        $subscriptionData['stripe_customer_id'] = $input['stripe_customer_id'];
+    }
+    if (isset($input['stripe_subscription_id'])) {
+        $subscriptionData['stripe_subscription_id'] = $input['stripe_subscription_id'];
+    }
+    if (isset($input['stripe_session_id'])) {
+        $subscriptionData['stripe_session_id'] = $input['stripe_session_id'];
+    }
+    
+    $response = supabaseRequest('POST', '/subscriptions', $subscriptionData);
+    
+    if (isset($response['error'])) {
+        throw new Exception($response['error']['message'] ?? 'Failed to save subscription');
+    }
+    
     echo json_encode([
         'success' => true,
-        'subscription_id' => $result[0]['id'] ?? null,
-        'status' => $subscriptionData['status'],
-        'expires_at' => $subscriptionData['expires_at'],
-        'features' => json_decode($subscriptionData['features'], true)
+        'message' => 'Subscription saved successfully',
+        'subscription_id' => $response['data'][0]['id'] ?? null,
+        'next_payment_date' => $nextPaymentDate
     ]);
     
 } catch (Exception $e) {
     error_log('Save subscription error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Failed to save subscription']);
+    echo json_encode([
+        'success' => false,
+        'message' => $e->getMessage()
+    ]);
 }
 ?>

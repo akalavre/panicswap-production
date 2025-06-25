@@ -1,5 +1,6 @@
-import { PublicKey } from '@solana/web3.js';
+import { AccountInfo, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
+import { PoolDecoder, PoolMetadata } from './PoolDecoderRegistry';
 
 // Pump.fun uses a bonding curve model
 interface PumpFunPoolState {
@@ -11,14 +12,22 @@ interface PumpFunPoolState {
   complete: boolean;
 }
 
-export class PumpFunPoolDecoder {
+export class PumpFunPoolDecoder implements PoolDecoder {
   // Pump.fun Program ID
-  private PUMP_FUN_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+  readonly name = 'Pump.fun';
+  readonly programId = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+  private PUMP_FUN_PROGRAM = new PublicKey(this.programId);
+
+  canDecode(account: AccountInfo<Buffer>): boolean {
+    // Pump.fun bonding curve accounts are typically around 200 bytes
+    return account.data.length >= 100 && account.data.length <= 300;
+  }
 
   /**
    * Decode Pump.fun bonding curve account
    */
-  decode(data: Buffer): any | null {
+  decode(account: AccountInfo<Buffer>, poolAddress: PublicKey): PoolMetadata | null {
+    const data = account.data;
     try {
       if (data.length < 100) {
         // Not a pump.fun account
@@ -54,15 +63,19 @@ export class PumpFunPoolDecoder {
       const solLiquidity = solReserve.toNumber() / 1e9; // Convert lamports to SOL
 
       return {
-        type: 'pump.fun',
-        tokenMint: tokenMint.toBase58(),
-        solReserve: solReserve.toString(),
-        tokenReserve: tokenReserve.toString(),
-        virtualSolReserve: virtualSolReserve.toString(),
-        virtualTokenReserve: virtualTokenReserve.toString(),
-        complete,
+        poolAddress: poolAddress.toString(),
+        tokenMint: tokenMint.toString(),
+        quoteMint: 'So11111111111111111111111111111111111111112', // SOL
         liquidity: solLiquidity * 150, // Assuming SOL = $150
-        program: this.PUMP_FUN_PROGRAM.toBase58()
+        programId: this.programId,
+        type: 'pump.fun',
+        additionalData: {
+          solReserve: solReserve.toString(),
+          tokenReserve: tokenReserve.toString(),
+          virtualSolReserve: virtualSolReserve.toString(),
+          virtualTokenReserve: virtualTokenReserve.toString(),
+          complete,
+        }
       };
 
     } catch (error) {

@@ -1,5 +1,6 @@
-import { PublicKey } from '@solana/web3.js';
+import { AccountInfo, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
+import { PoolDecoder, PoolMetadata } from './PoolDecoderRegistry';
 
 // Raydium AMM Pool structure
 interface RaydiumPoolState {
@@ -27,14 +28,22 @@ interface RaydiumPoolState {
   // ... other fields
 }
 
-export class RaydiumPoolDecoder {
+export class RaydiumPoolDecoder implements PoolDecoder {
   // Raydium AMM V4 Program ID
-  private RAYDIUM_AMM_PROGRAM = new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
+  readonly name = 'Raydium AMM V4';
+  readonly programId = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+  private RAYDIUM_AMM_PROGRAM = new PublicKey(this.programId);
+
+  canDecode(account: AccountInfo<Buffer>): boolean {
+    // Raydium pool accounts are typically 752 bytes
+    return account.data.length >= 752;
+  }
 
   /**
    * Decode Raydium pool account data
    */
-  decode(data: Buffer): any | null {
+  decode(account: AccountInfo<Buffer>, poolAddress: PublicKey): PoolMetadata | null {
+    const data = account.data;
     try {
       if (data.length < 752) {
         // Not a Raydium pool account
@@ -76,19 +85,20 @@ export class RaydiumPoolDecoder {
       // Read quote vault (32 bytes)
       const quoteVault = new PublicKey(data.slice(offset, offset + 32));
 
-      // For liquidity, we'd need to fetch vault account balances
-      // For now, return basic pool info
+      // Return PoolMetadata format
       return {
+        poolAddress: poolAddress.toString(),
+        tokenMint: baseMint.toString(),
+        quoteMint: quoteMint.toString(),
+        liquidity: 0, // Will be calculated from vault balances
+        programId: this.programId,
         type: 'raydium',
-        baseMint: baseMint.toBase58(),
-        quoteMint: quoteMint.toBase58(),
-        baseVault: baseVault.toBase58(),
-        quoteVault: quoteVault.toBase58(),
-        baseDecimal,
-        quoteDecimal,
-        // Liquidity will be calculated from vault balances
-        liquidity: 0,
-        program: this.RAYDIUM_AMM_PROGRAM.toBase58()
+        additionalData: {
+          baseVault: baseVault.toString(),
+          quoteVault: quoteVault.toString(),
+          baseDecimal,
+          quoteDecimal,
+        }
       };
 
     } catch (error) {

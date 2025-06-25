@@ -6,16 +6,23 @@ class SupabaseTokenFetcher {
     }
 
     /**
+     * Clear the cache to force fresh data on next fetch
+     */
+    invalidateCache() {
+        this.cache.clear();
+    }
+
+    /**
      * Fetch comprehensive token data for dashboard
      * @param {string} walletAddress - User's wallet address
      * @returns {Promise<Array>} Array of tokens with all dashboard data
      */
     async fetchDashboardTokens(walletAddress) {
         try {
-            // If no wallet address, show demo tokens
+            // If no wallet address, return empty array
             if (!walletAddress) {
-                console.log('No wallet connected, loading demo tokens...');
-                return this.fetchDemoTokens();
+                console.log('No wallet connected');
+                return [];
             }
 
             // First, get user's wallet tokens (including test tokens)
@@ -26,12 +33,12 @@ class SupabaseTokenFetcher {
 
             if (walletError) {
                 console.error('Error fetching wallet tokens:', walletError);
-                return this.fetchDemoTokens();
+                return [];
             }
 
             if (!walletTokens || walletTokens.length === 0) {
-                console.log('No wallet tokens found, loading demo tokens...');
-                return this.fetchDemoTokens();
+                console.log('No wallet tokens found for address:', walletAddress);
+                return []; // Return empty array instead of demo tokens
             }
 
             // Get all token mints
@@ -44,30 +51,42 @@ class SupabaseTokenFetcher {
                 rugchecks,
                 pumpFunData,
                 protectedTokens,
-                priceHistory
+                priceHistory,
+                mlRiskData
             ] = await Promise.all([
                 this.fetchTokenMetadata(tokenMints),
                 this.fetchTokenPrices(tokenMints),
                 this.fetchRugcheckReports(tokenMints),
                 this.fetchPumpFunMonitoring(tokenMints),
                 this.fetchProtectedTokens(walletAddress, tokenMints),
-                this.fetchLatestPriceHistory(tokenMints) // Re-enabled with fixed query
+                this.fetchLatestPriceHistory(tokenMints), // Re-enabled with fixed query
+                this.fetchMLRiskAnalysis(tokenMints)
             ]);
 
             // Combine all data
-            return this.combineTokenData(
+            const combinedData = this.combineTokenData(
                 walletTokens,
                 metadata,
                 prices,
                 rugchecks,
                 pumpFunData,
                 protectedTokens,
-                priceHistory
+                priceHistory,
+                mlRiskData
             );
+            
+            // Check for tokens without ML data and queue them
+            const tokensWithoutML = combinedData.filter(token => !token.has_ml_analysis);
+            if (tokensWithoutML.length > 0) {
+                console.log(`Found ${tokensWithoutML.length} tokens without ML analysis, queuing...`);
+                await this.queueTokensForMLGeneration(tokensWithoutML.map(t => t.token_mint));
+            }
+            
+            return combinedData;
 
         } catch (error) {
             console.error('Error in fetchDashboardTokens:', error);
-            return this.fetchDemoTokens();
+            return [];
         }
     }
 
@@ -120,6 +139,10 @@ class SupabaseTokenFetcher {
                 lp_locked,
                 honeypot_status,
                 dev_activity_pct,
+                dev_activity_pct_total,
+                dev_activity_24h_pct,
+                dev_activity_1h_pct,
+                last_dev_tx,
                 launch_time,
                 liquidity_current,
                 liquidity_change_1h_pct,
@@ -171,8 +194,8 @@ class SupabaseTokenFetcher {
             .from('protected_tokens')
             .select('*')
             .eq('wallet_address', walletAddress)
-            .in('token_mint', tokenMints)
-            .eq('is_active', true);
+            .in('token_mint', tokenMints);
+            // Removed .eq('is_active', true) to fetch all protection records
         
         if (error) {
             console.error('Error fetching protected tokens:', error);
@@ -180,6 +203,50 @@ class SupabaseTokenFetcher {
         }
         
         return new Map(data.map(item => [item.token_mint, item]));
+    }
+
+    /**
+     * Fetch ML risk analysis data
+     */
+    async fetchMLRiskAnalysis(tokenMints) {
+        const { data, error } = await supabaseClient
+            .from('ml_risk_analysis')
+            .select(`
+                token_mint,
+                risk_score,
+                risk_level,
+                ml_risk_score,
+                ml_confidence,
+                ml_recommendation,
+                detected_patterns,
+                updated_at
+            `)
+            .in('token_mint', tokenMints);
+        
+        if (error) {
+            console.error('Error fetching ML risk analysis:', error);
+            return new Map();
+        }
+        
+        return new Map(data.map(item => [item.token_mint, item]));
+    }
+    
+    /**
+     * Queue tokens for ML generation
+     */
+    async queueTokensForMLGeneration(tokenMints) {
+        try {
+            const queueData = tokenMints.map(mint => ({
+                token_mint: mint,
+                needs_ml_generation: true
+            }));
+            
+            await supabaseClient
+                .from('ml_generation_queue')
+                .upsert(queueData, { onConflict: 'token_mint' });
+        } catch (error) {
+            console.error('Error queuing tokens for ML generation:', error);
+        }
     }
 
     /**
@@ -214,7 +281,7 @@ class SupabaseTokenFetcher {
     /**
      * Combine all token data into dashboard format
      */
-    combineTokenData(walletTokens, metadata, prices, rugchecks, pumpFunData, protectedTokens, priceHistory) {
+    combineTokenData(walletTokens, metadata, prices, rugchecks, pumpFunData, protectedTokens, priceHistory, mlRiskData) {
         return walletTokens.map(walletToken => {
             const mint = walletToken.token_mint;
             const meta = metadata.get(mint) || {};
@@ -223,22 +290,73 @@ class SupabaseTokenFetcher {
             const pumpFun = pumpFunData.get(mint);
             const protection = protectedTokens.get(mint);
             const latestPrice = priceHistory.get(mint) || {};
+            const mlData = mlRiskData ? mlRiskData.get(mint) : null;
 
-            // Calculate actual balance
+            // Calculate actual balance for value computation
             const decimals = walletToken.decimals || meta.decimals || 9;
-            const balance = walletToken.balance / Math.pow(10, decimals);
-
-            // Get best price (prefer latest history)
-            const currentPrice = latestPrice.price || price.price_usd || price.price || 0;
+            let balance;
             
-            // Calculate value
+            // Balance calculation logic:
+            // - raw_balance: already decimal-adjusted balance (for test tokens)
+            // - balance: raw balance from database that needs decimal adjustment
+            if (walletToken.raw_balance !== null && walletToken.raw_balance !== undefined) {
+                // raw_balance is already decimal-adjusted, use directly
+                balance = walletToken.raw_balance;
+            } else if (walletToken.balance !== null && walletToken.balance !== undefined) {
+                // balance is raw, needs decimal adjustment
+                balance = walletToken.balance / Math.pow(10, decimals);
+            } else {
+                balance = 0;
+            }
+            
+            // Debug balance calculation
+            console.log(`Balance calculation for ${mint}:`, {
+                raw_balance: walletToken.raw_balance,
+                stored_balance: walletToken.balance,
+                wallet_decimals: walletToken.decimals,
+                meta_decimals: meta.decimals,
+                used_decimals: decimals,
+                division_factor: Math.pow(10, decimals),
+                calculated_balance: balance,
+                is_test_token: walletToken.is_test_token
+            });
+
+            // Get best price (prefer metadata from our database)
+            let currentPrice = meta.current_price || latestPrice.price || price.price_usd || price.price || 0;
+            
+            // Ensure we have a valid price
+            if (!currentPrice || currentPrice === 0 || isNaN(currentPrice)) {
+                // Try other price sources or set to 0
+                currentPrice = price.current_price || rugcheck.current_price || 0;
+            }
+            
+            // Calculate value using the decimal-adjusted balance
             const value = balance * currentPrice;
+            
+            // Debug value calculation
+            console.log(`Value calculation for ${mint}:`, {
+                symbol: meta.symbol || price.symbol,
+                decimal_adjusted_balance: balance,
+                raw_balance: walletToken.balance,
+                current_price: currentPrice,
+                calculated_value: value,
+                price_sources: {
+                    meta_price: meta.current_price,
+                    latest_price: latestPrice.price,
+                    price_usd: price.price_usd,
+                    fallback_price: price.price,
+                    rugcheck_price: rugcheck.current_price
+                },
+                value_is_zero: value === 0,
+                price_is_zero: currentPrice === 0,
+                balance_is_zero: balance === 0
+            });
 
             // Calculate age
             const launchTime = rugcheck.launch_time || meta.created_at;
             const age = launchTime ? this.calculateAge(launchTime) : null;
 
-            return {
+            const tokenData = {
                 // Identity
                 token_mint: mint,
                 symbol: meta.symbol || price.symbol || 'Unknown',
@@ -247,24 +365,37 @@ class SupabaseTokenFetcher {
                 platform: meta.platform || price.platform || 'unknown',
 
                 // Balance & Value
-                balance: balance,
+                balance: balance, // Decimal-adjusted balance for calculations
+                raw_balance: walletToken.raw_balance, // Raw balance for test tokens (already adjusted)
+                original_balance: walletToken.balance, // Original raw balance from database (for display)
+                decimals: decimals,
                 price: currentPrice,
-                value: value,
+                value: value, // Calculated as: balance * currentPrice
 
-                // Price metrics
-                price_change_24h: price.change_24h || 0,
-                liquidity_usd: latestPrice.liquidity || rugcheck.liquidity_current || price.liquidity || 0,
+                // Price metrics - prioritize metadata values from our database
+                price_change_24h: meta.price_24h_change || price.change_24h || 0,
+                liquidity_usd: meta.current_liquidity || latestPrice.liquidity || rugcheck.liquidity_current || price.liquidity || 0,
                 liquidity_change_1h: rugcheck.liquidity_change_1h_pct || 0,
                 liquidity_change_24h: rugcheck.liquidity_change_24h_pct || 0,
-                volume_24h: latestPrice.volume_24h || price.volume_24h || 0,
-                market_cap: latestPrice.market_cap || price.market_cap || 0,
+                volume_24h: meta.volume_24h || latestPrice.volume_24h || price.volume_24h || 0,
+                market_cap: meta.market_cap || latestPrice.market_cap || price.market_cap || 0,
 
-                // Risk metrics
-                risk_score: rugcheck.risk_score || pumpFun?.risk_score || 0,
-                risk_level: rugcheck.risk_level || this.calculateRiskLevel(rugcheck.risk_score),
-                holder_count: rugcheck.holders || pumpFun?.total_holders || 0,
+                // Risk metrics - prefer ML-enhanced data
+                risk_score: mlData?.risk_score || rugcheck.risk_score || pumpFun?.risk_score || 0,
+                risk_level: mlData?.risk_level || rugcheck.risk_level || this.calculateRiskLevel(rugcheck.risk_score || pumpFun?.risk_score || 0),
+                ml_risk_score: mlData?.ml_risk_score || rugcheck.ml_risk_score || null,
+                ml_confidence: mlData?.ml_confidence || rugcheck.ml_confidence || null,
+                ml_recommendation: mlData?.ml_recommendation || rugcheck.ml_recommendation || null,
+                detected_patterns: mlData?.detected_patterns || rugcheck.detected_patterns || [],
+                has_ml_analysis: !!mlData,
+                holder_count: meta.holder_count || rugcheck.holders || pumpFun?.total_holders || 0,
                 creator_balance_pct: rugcheck.creator_balance_percent || pumpFun?.dev_wallet_percentage || 0,
                 dev_activity_pct: rugcheck.dev_activity_pct || 0,
+                dev_activity_pct_total: rugcheck.dev_activity_pct_total || rugcheck.dev_activity_pct || 0,
+                dev_activity_24h_pct: rugcheck.dev_activity_24h_pct || rugcheck.dev_activity_pct || 0,
+                dev_activity_1h_pct: rugcheck.dev_activity_1h_pct || 0,
+                last_dev_tx: rugcheck.last_dev_tx || null,
+                dev_wallets: [], // Now stored in separate table
                 honeypot_status: rugcheck.honeypot_status || 'unknown',
                 lp_locked_pct: rugcheck.lp_locked || 0,
                 warnings: rugcheck.warnings || [],
@@ -275,17 +406,33 @@ class SupabaseTokenFetcher {
                 is_pump_fun: !!pumpFun,
                 pump_fun_complete: pumpFun?.is_complete || false,
                 concentration_risk: pumpFun?.concentration_risk || rugcheck.concentration_risk,
+                is_test_token: walletToken.is_test_token || false,
 
-                // Protection status
-                protected: !!protection,
+                // Protection status - check is_active which is the source of truth
+                protected: !!(protection && protection.is_active),
                 protection_data: protection,
-                monitoring_active: protection?.monitoring_active || false,
+                monitoring_active: !!(protection && protection.is_active && protection.monitoring_active),
+                status: protection?.status || 'active', // Include status for rug detection
 
                 // Sorting helpers
                 sort_value: value,
                 sort_liquidity: latestPrice.liquidity || rugcheck.liquidity_current || price.liquidity || 0,
                 sort_risk: rugcheck.risk_score || pumpFun?.risk_score || 0
             };
+
+            // Debug log to see what data is being created
+            console.log(`Token ${tokenData.symbol} data:`, {
+                raw_balance: walletToken.balance,
+                calculated_balance: balance,
+                meta_price: meta.current_price,
+                latest_price: latestPrice.price,
+                price_usd: price.price_usd,
+                final_price: currentPrice,
+                calculated_value: value,
+                final_token_data: tokenData
+            });
+
+            return tokenData;
         }).sort((a, b) => b.sort_value - a.sort_value); // Sort by value descending
     }
 
@@ -412,9 +559,9 @@ class SupabaseTokenFetcher {
                     market_cap: 1000000,
                     risk_score: 25,
                     risk_level: 'LOW',
-                    holder_count: 5000,
-                    creator_balance_pct: 5,
-                    dev_activity_pct: 10,
+                    holder_count: 0,
+                    creator_balance_pct: 0,
+                    dev_activity_pct: 0,
                     honeypot_status: 'safe',
                     lp_locked_pct: 100,
                     age: { value: 30, unit: 'd', raw_days: 30 },
@@ -464,9 +611,9 @@ class SupabaseTokenFetcher {
                     market_cap: latestPrice.market_cap || token.market_cap || 0,
                     risk_score: rugcheck.risk_score || 25,
                     risk_level: rugcheck.risk_level || 'LOW',
-                    holder_count: rugcheck.holders || Math.floor(Math.random() * 10000),
-                    creator_balance_pct: rugcheck.creator_balance_percent || 5,
-                    dev_activity_pct: rugcheck.dev_activity_pct || 10,
+                    holder_count: rugcheck.holders || 0,
+                    creator_balance_pct: rugcheck.creator_balance_percent || 0,
+                    dev_activity_pct: rugcheck.dev_activity_pct || 0,
                     honeypot_status: rugcheck.honeypot_status || 'safe',
                     lp_locked_pct: rugcheck.lp_locked || 100,
                     age: this.calculateAge(rugcheck.launch_time || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),

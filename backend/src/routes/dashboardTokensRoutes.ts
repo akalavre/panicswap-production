@@ -26,6 +26,21 @@ router.post('/api/dashboard/register-tokens', async (req: Request, res: Response
 
     console.log(`[Dashboard] Registering ${tokenMints.length} tokens for wallet ${walletAddress}`);
     console.log(`[Dashboard] Token mints:`, tokenMints);
+    console.log(`[Dashboard] Request origin:`, req.headers.origin || 'no origin');
+    console.log(`[Dashboard] User-Agent:`, req.headers['user-agent'] || 'no user-agent');
+    console.log(`[Dashboard] Referer:`, req.headers.referer || 'no referer');
+    
+    // Add stack trace to see if it's being called internally
+    console.log(`[Dashboard] Stack trace:`, new Error().stack);
+    
+    // TEMPORARY: Block registration of more than 5 tokens to prevent the bug
+    if (tokenMints.length > 5) {
+      console.error(`[Dashboard] BLOCKED: Attempted to register ${tokenMints.length} tokens - this is likely a bug!`);
+      return res.status(400).json({ 
+        error: 'Too many tokens - registration blocked to prevent bug',
+        details: `Attempted to register ${tokenMints.length} tokens, max allowed is 5`
+      });
+    }
 
     // Mark these tokens for immediate price fetching
     let addedCount = 0;
@@ -90,6 +105,18 @@ router.post('/api/dashboard/register-tokens', async (req: Request, res: Response
       } catch (e) {
         console.error('[Dashboard] Error fetching prices immediately:', e);
       }
+      
+      // Trigger comprehensive data population for new tokens
+      if (newMints.length > 0) {
+        const { tokenDataPopulator } = await import('../services/TokenDataPopulator');
+        for (const mint of newMints) {
+          console.log(`[Dashboard] Triggering data population for new token: ${mint}`);
+          tokenDataPopulator.populateTokenData(mint, walletAddress)
+            .catch(error => {
+              console.error(`[Dashboard] Failed to populate data for ${mint}:`, error);
+            });
+        }
+      }
     }
 
     res.json({ 
@@ -102,6 +129,43 @@ router.post('/api/dashboard/register-tokens', async (req: Request, res: Response
   } catch (error) {
     console.error('[Dashboard] Error registering tokens:', error);
     res.status(500).json({ error: 'Failed to register tokens' });
+  }
+});
+
+// Endpoint to populate data for a specific token
+router.post('/api/tokens/populate-data', async (req: Request, res: Response) => {
+  try {
+    const { tokenMint, walletAddress } = req.body;
+    
+    if (!tokenMint || !walletAddress) {
+      return res.status(400).json({ 
+        error: 'tokenMint and walletAddress required' 
+      });
+    }
+    
+    console.log(`[Dashboard] Triggering data population for ${tokenMint}`);
+    
+    // Import and use tokenDataPopulator
+    const { tokenDataPopulator } = await import('../services/TokenDataPopulator');
+    
+    // Start data population asynchronously
+    tokenDataPopulator.populateTokenData(tokenMint, walletAddress)
+      .then(() => {
+        console.log(`[Dashboard] Data population completed for ${tokenMint}`);
+      })
+      .catch(error => {
+        console.error(`[Dashboard] Data population failed for ${tokenMint}:`, error);
+      });
+    
+    res.json({ 
+      success: true, 
+      message: 'Data population started',
+      tokenMint
+    });
+    
+  } catch (error) {
+    console.error('[Dashboard] Error starting data population:', error);
+    res.status(500).json({ error: 'Failed to start data population' });
   }
 });
 
