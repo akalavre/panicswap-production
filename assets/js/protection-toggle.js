@@ -36,11 +36,13 @@
             
             const tokenMint = settingsBtn.dataset.mint;
             const tokenSymbol = settingsBtn.dataset.symbol || 'Token';
+            const tokenName = settingsBtn.dataset.name || '';
+            const tokenIcon = settingsBtn.dataset.icon || '';
             
             // Get current settings for this token
             getCurrentProtectionSettings(tokenMint).then(settings => {
                 if (window.openProtectionSettings) {
-                    window.openProtectionSettings(tokenMint, tokenSymbol, settings);
+                    window.openProtectionSettings(tokenMint, tokenSymbol, settings, tokenName, tokenIcon);
                 }
             });
             return;
@@ -84,6 +86,15 @@
             return;
         }
         
+        // Check protection mode for enabling protection (but allow disabling)
+        if (!currentlyProtected) {
+            const protectionMode = await checkUserProtectionMode(walletAddress);
+            if (protectionMode === 'watch-only') {
+                showNotification('Full protection mode required for auto-execution. You can still receive alerts in watch-only mode.', 'warning');
+                // Allow monitoring/alerts but show warning about limitations
+            }
+        }
+        
         // Lock this toggle
         toggleInProgress.set(tokenMint, true);
         
@@ -92,6 +103,7 @@
         
         // Optimistically update UI state first
         const newProtectedState = !currentlyProtected;
+        
         updateButtonState(btn, newProtectedState);
         
         // Record the optimistic change in tokenListV3State.recentChanges
@@ -108,6 +120,40 @@
             if (tokenIndex !== -1) {
                 window.tokenListV3State.tokens[tokenIndex].protected = newProtectedState;
                 window.tokenListV3State.tokens[tokenIndex].monitoring_active = newProtectedState;
+                
+                // Clear Supabase cache entry for this token to ensure realtime listeners receive the change
+                if (window.supabaseClient && typeof window.supabaseClient.invalidateCache === 'function') {
+                    try {
+                        window.supabaseClient.invalidateCache('protected_tokens', {
+                            token_mint: tokenMint,
+                            wallet_address: walletAddress
+                        });
+                        console.log(`Cleared Supabase cache for token ${tokenMint}`);
+                    } catch (error) {
+                        console.warn('Failed to clear Supabase cache:', error);
+                    }
+                }
+                
+                // Force a Supabase realtime broadcast by manually triggering a notification
+                if (window.supabaseClient && typeof window.supabaseClient.channel === 'function') {
+                    try {
+                        const channel = window.supabaseClient.channel('protection_sync');
+                        channel.send({
+                            type: 'broadcast',
+                            event: 'protection_updated',
+                            payload: {
+                                token_mint: tokenMint,
+                                wallet_address: walletAddress,
+                                protected: newProtectedState,
+                                monitoring_active: newProtectedState,
+                                timestamp: Date.now()
+                            }
+                        });
+                        console.log(`Broadcasted protection change for token ${tokenMint}`);
+                    } catch (error) {
+                        console.warn('Failed to broadcast protection change:', error);
+                    }
+                }
             }
         }
         
@@ -154,11 +200,6 @@
                     window.onProtectionToggled(tokenMint, newProtectedState);
                 }
                 
-                // Update real-time risk display immediately
-                if (window.realTimeRisk && window.realTimeRisk.fetchTokenMonitoringStatus) {
-                    window.realTimeRisk.fetchTokenMonitoringStatus(tokenMint);
-                }
-                
                 // If protection was just enabled, force update monitoring stats
                 if (newProtectedState) {
                     fetch(`http://localhost:3001/api/monitoring/force-update`, {
@@ -174,10 +215,28 @@
                     .then(response => response.json())
                     .then(data => {
                         console.log('Force update triggered:', data);
+                        // Update real-time risk display after backend update completes
+                        if (window.realTimeRisk && window.realTimeRisk.refreshMonitoringStatus) {
+                            // Add a small delay to ensure backend has updated the database
+                            setTimeout(() => {
+                                window.realTimeRisk.refreshMonitoringStatus(tokenMint);
+                            }, 1500);
+                        }
                     })
                     .catch(error => {
                         console.error('Error triggering force update:', error);
+                        // Still try to update display even if force update fails
+                        if (window.realTimeRisk && window.realTimeRisk.refreshMonitoringStatus) {
+                            setTimeout(() => {
+                                window.realTimeRisk.refreshMonitoringStatus(tokenMint);
+                            }, 1500);
+                        }
                     });
+                } else {
+                    // Update real-time risk display immediately when disabling
+                    if (window.realTimeRisk && window.realTimeRisk.fetchTokenMonitoringStatus) {
+                        window.realTimeRisk.fetchTokenMonitoringStatus(tokenMint);
+                    }
                 }
                 
                 // Update the local token state first
@@ -287,26 +346,26 @@
         }
     }
     
-    // Update button appearance based on protection state
-    function updateButtonState(btn, isProtected) {
-        // Update data attribute
-        btn.dataset.protected = isProtected.toString();
+    // Helper function to apply protected theme (red or gray)
+    function applyProtectedTheme(btn, isProtected) {
+        const classList = btn.classList;
         
-        // Dispatch custom event for other components to listen to
-        document.dispatchEvent(new CustomEvent('protectionToggled', {
-            detail: { 
-                button: btn,
-                isProtected: isProtected,
-                tokenMint: btn.dataset.tokenMint
-            }
-        }));
-        
-        // Update classes
         if (isProtected) {
-            // Protected state - red theme
-            btn.className = btn.className
-                .replace(/bg-gray-\d+\/\d+|border-gray-\d+\/\d+|hover:bg-gray-\d+\/\d+|hover:border-gray-\d+\/\d+|glass-card-enhanced/g, '')
-                .trim() + ' bg-red-500/20 border-red-500/50 hover:bg-red-500/30 hover:border-red-500/70 shadow-lg shadow-red-500/20';
+            // Remove all gray theme classes explicitly
+            classList.remove(
+                'glass-card-enhanced',
+                'bg-gray-800/40', 'border-gray-700/50', 
+                'hover:bg-gray-800/60', 'hover:border-gray-600/50'
+            );
+            // Remove any other gray variants that might exist
+            btn.className = btn.className.replace(/bg-gray-\d+\/\d+|border-gray-\d+\/\d+|hover:bg-gray-\d+\/\d+/g, '');
+            
+            // Add red theme classes
+            classList.add(
+                'bg-red-500/20', 'border-red-500/50',
+                'hover:bg-red-500/30', 'hover:border-red-500/70',
+                'shadow-lg', 'shadow-red-500/20'
+            );
             
             // Update icon color
             const icon = btn.querySelector('svg');
@@ -315,21 +374,32 @@
                 icon.setAttribute('class', currentClass.replace(/text-gray-\d+/g, 'text-red-400'));
             }
             
-            // Add pulse indicator
-            const indicator = btn.querySelector('.protection-indicator');
+            // Guarantee pulse indicator is added only once
+            let indicator = btn.querySelector('.protection-indicator');
             if (!indicator) {
                 const div = btn.querySelector('div.relative');
                 if (div) {
-                    div.insertAdjacentHTML('beforeend', 
-                        '<div class="protection-indicator absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>'
-                    );
+                    const pulseElement = document.createElement('div');
+                    pulseElement.className = 'protection-indicator absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse';
+                    div.appendChild(pulseElement);
                 }
             }
         } else {
-            // Unprotected state - gray theme
-            btn.className = btn.className
-                .replace(/bg-red-\d+\/\d+|border-red-\d+\/\d+|hover:bg-red-\d+\/\d+|hover:border-red-\d+\/\d+|shadow-lg|shadow-red-\d+\/\d+/g, '')
-                .trim() + ' glass-card-enhanced bg-gray-800/40 border-gray-700/50 hover:bg-gray-800/60 hover:border-gray-600/50';
+            // Remove all red theme classes explicitly
+            classList.remove(
+                'bg-red-500/20', 'border-red-500/50',
+                'hover:bg-red-500/30', 'hover:border-red-500/70',
+                'shadow-lg', 'shadow-red-500/20'
+            );
+            // Remove any other red variants that might exist
+            btn.className = btn.className.replace(/bg-red-\d+\/\d+|border-red-\d+\/\d+|hover:bg-red-\d+\/\d+|shadow-red-\d+\/\d+/g, '');
+            
+            // Add gray theme classes
+            classList.add(
+                'glass-card-enhanced',
+                'bg-gray-800/40', 'border-gray-700/50',
+                'hover:bg-gray-800/60', 'hover:border-gray-600/50'
+            );
             
             // Update icon color
             const icon = btn.querySelector('svg');
@@ -338,17 +408,37 @@
                 icon.setAttribute('class', currentClass.replace(/text-red-\d+/g, 'text-gray-400'));
             }
             
-            // Remove pulse indicator
+            // Guarantee pulse indicator is removed only once
             const indicator = btn.querySelector('.protection-indicator');
             if (indicator) {
                 indicator.remove();
             }
         }
+    }
+    
+    // Update button appearance based on protection state
+    function updateButtonState(btn, isProtected) {
+        
+        // Update data attribute
+        btn.dataset.protected = isProtected.toString();
+        
+        // Dispatch custom event for other components to listen to
+        document.dispatchEvent(new CustomEvent('protectionToggled', {
+            detail: { 
+                button: btn,
+                isProtected: isProtected,
+                tokenMint: btn.dataset.mint
+            }
+        }));
+        
+        // Apply theme using the helper function
+        applyProtectedTheme(btn, isProtected);
         
         // Update accessibility attributes
         btn.setAttribute('aria-label', isProtected ? 'Disable protection' : 'Enable protection');
         btn.setAttribute('title', isProtected ? 'Click to disable protection' : 'Click to enable protection');
         btn.setAttribute('aria-pressed', isProtected.toString());
+        
     }
     
     // Update protection counts in UI (simplified - just triggers the counter refresh)
@@ -406,6 +496,30 @@
             }
         }
         return DEFAULT_MEMPOOL_SETTINGS;
+    }
+    
+    // Check user's protection mode
+    async function checkUserProtectionMode(walletAddress) {
+        try {
+            const response = await fetch(`/api/get-subscription-status.php?wallet=${walletAddress}`);
+            const data = await response.json();
+            
+            if (data.subscription) {
+                // Check explicit protection_mode or determine from plan
+                if (data.subscription.protection_mode) {
+                    return data.subscription.protection_mode;
+                }
+                
+                // Fallback: determine from plan type
+                const fullAccessPlans = ['pro', 'enterprise', 'degen-mode'];
+                return fullAccessPlans.includes(data.subscription.plan.toLowerCase()) ? 'full' : 'watch-only';
+            }
+            
+            return 'watch-only'; // Default to watch-only for free users
+        } catch (error) {
+            console.error('Error checking protection mode:', error);
+            return 'watch-only'; // Default to safe mode on error
+        }
     }
     
     // Get current protection settings for a token
