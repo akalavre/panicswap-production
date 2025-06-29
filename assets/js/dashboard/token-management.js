@@ -58,7 +58,6 @@ async function getCurrentPlanTokenLimit() {
         const user = users[0];
         
         if (user && user.id) {
-            console.log('Querying subscriptions for user ID:', user.id);
             const { data: subscriptions, error: subError } = await supabaseClient
                 .from('subscriptions')
                 .select('plan')
@@ -139,7 +138,6 @@ function setupProtectedTokensRealtime() {
     // Check if subscription already exists
     const channelName = `protected_tokens_${walletAddress}`;
     if (window.dashboardSubscriptions && window.dashboardSubscriptions[channelName]) {
-        console.log('Protected tokens subscription already exists');
         return window.dashboardSubscriptions[channelName];
     }
     
@@ -160,7 +158,6 @@ function setupProtectedTokensRealtime() {
                 filter: `wallet_address=eq.${walletAddress}`
             },
             (payload) => {
-                console.log('Protected tokens changed:', payload);
                 // Reload protected tokens data
                 loadProtectedTokensData();
             }

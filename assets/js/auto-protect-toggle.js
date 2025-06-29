@@ -29,7 +29,9 @@
     async function handleAutoProtectToggle(event) {
         const checkbox = event.target;
         const isEnabled = checkbox.checked;
-        const walletAddress = localStorage.getItem('walletAddress');
+        // Use WalletState for wallet information
+        const walletState = window.walletState ? window.walletState.state : null;
+        const walletAddress = walletState ? walletState.address : null;
         
         if (!walletAddress) {
             showNotification('Please connect your wallet first', 'error');
@@ -83,7 +85,6 @@
                 
                 // The backend updates the Supabase wallet_auto_protection table
                 // Wait for the real-time subscription to update the UI accordingly
-                console.log('Waiting for real-time updates to reflect token state changes.');
             } else {
                 // Revert checkbox state on error
                 checkbox.checked = !isEnabled;
