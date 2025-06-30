@@ -47,9 +47,9 @@
             <div>
                 <h3 class="text-white font-semibold mb-6">Product</h3>
                 <ul class="space-y-3">
-                    <li><a href="dashboard.php" class="text-gray-400 hover:text-white transition-colors">Dashboard</a></li>
-                    <li><a href="how-it-works.php#pricing" class="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
-                    <li><a href="how-it-works.php" class="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
+                    <li><a href="/dashboard" class="text-gray-400 hover:text-white transition-colors">Dashboard</a></li>
+                    <li><a href="/how-it-works#pricing" class="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
+                    <li><a href="/how-it-works" class="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
                     <li><a href="#" class="text-gray-400 hover:text-white transition-colors">API Docs</a></li>
                 </ul>
             </div>
@@ -58,11 +58,11 @@
             <div>
                 <h3 class="text-white font-semibold mb-6">Company</h3>
                 <ul class="space-y-3">
-                    <li><a href="about.php" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-                    <li><a href="security.php" class="text-gray-400 hover:text-white transition-colors">Security</a></li>
-                    <li><a href="terms.php" class="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
-                    <li><a href="privacy.php" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                    <li><a href="contact.php" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+                    <li><a href="/about" class="text-gray-400 hover:text-white transition-colors">About Us</a></li>
+                    <li><a href="/security" class="text-gray-400 hover:text-white transition-colors">Security</a></li>
+                    <li><a href="/terms" class="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
+                    <li><a href="/privacy" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                    <li><a href="/contact" class="text-gray-400 hover:text-white transition-colors">Contact</a></li>
                 </ul>
             </div>
         </div>

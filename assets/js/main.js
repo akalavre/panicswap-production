@@ -7,8 +7,8 @@ const API_BASE_URL = window.location.origin + '/PanicSwap-php/api'; // PHP API U
 const WS_URL = 'ws://localhost:3001'; // WebSocket URL for real-time updates (optional - backend service)
 const USE_BACKEND_API = false; // Set to true only if Node.js backend is running
 
-// Global state
-let walletState = {
+// Global state (deprecated - use window.walletState from wallet-state.js instead)
+let legacyWalletState = {
     connected: false,
     address: null,
     balance: 0,
@@ -30,6 +30,7 @@ let ws = null;
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+    // Migration is now handled by WalletState
     initializeAnimations();
     initializeIntersectionObservers();
     initializeParallaxEffects();
@@ -38,6 +39,18 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeWallet();
     initializeRealTimeUpdates();
     initializeProtectionMonitoring();
+    
+    // Check if we're on the dashboard and show connect modal if no wallet
+    if (window.location.pathname.includes('dashboard.php')) {
+        setTimeout(() => {
+            // Use WalletState to check connection status
+            if (window.walletState && !window.walletState.state.connected) {
+                if (typeof openWalletConnectModal === 'function') {
+                    openWalletConnectModal();
+                }
+            }
+        }, 1000); // Small delay to ensure all scripts are loaded
+    }
     
     // Set Supabase credentials if available
     if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
@@ -454,10 +467,10 @@ async function updateRugStats() {
 
 // Initialize protection monitoring
 function initializeProtectionMonitoring() {
-    if (walletState.connected) {
+    if (legacyWalletState.connected) {
         // Initialize protection events for real-time notifications
         if (window.protectionEvents) {
-            window.protectionEvents.init(walletState.address).catch(err => {
+            window.protectionEvents.init(legacyWalletState.address).catch(err => {
                 console.error('Failed to initialize protection events:', err);
             });
         }
@@ -482,7 +495,7 @@ async function loadProtectedTokens() {
     }
     
     try {
-        const response = await apiCall(`protected-tokens/${walletState.address}`);
+        const response = await apiCall(`protected-tokens/${legacyWalletState.address}`);
         protectionState.activeProtections = response.tokens || [];
         updateProtectionUI();
     } catch (error) {
@@ -492,13 +505,13 @@ async function loadProtectedTokens() {
 
 // Start monitoring
 async function startMonitoring() {
-    if (!USE_BACKEND_API || !walletState.connected || protectionState.monitoring) return;
+    if (!USE_BACKEND_API || !legacyWalletState.connected || protectionState.monitoring) return;
     
     try {
         await apiCall('monitoring/start', {
             method: 'POST',
             body: JSON.stringify({
-                wallet: walletState.address,
+                wallet: legacyWalletState.address,
                 tokens: protectionState.activeProtections.map(p => p.address)
             })
         });
@@ -521,13 +534,38 @@ function initializeWallet() {
         connectWalletBtn.addEventListener('click', connectWallet);
     }
     
-    // Check if wallet was previously connected
-    const savedWallet = localStorage.getItem('walletAddress');
-    if (savedWallet) {
-        walletState.connected = true;
-        walletState.address = savedWallet;
-        updateWalletUI();
-        loadWalletData();
+    // Initialize WalletState if available and try to restore connection
+    if (window.walletState) {
+        // Listen for wallet state changes
+        window.walletState.on('change', (state) => {
+            legacyWalletState.connected = (state.status === 'connected');
+            legacyWalletState.address = state.address;
+            updateWalletUI();
+            
+            if (state.status === 'connected') {
+                loadWalletData();
+                initializeProtectionMonitoring();
+            }
+        });
+        
+        // Try to restore connection
+        window.walletState.restoreConnection().then(restoredAddress => {
+            if (restoredAddress) {
+                console.log('Wallet connection restored:', restoredAddress);
+            } else {
+                // Check if we have a previously connected wallet that needs manual reconnection
+                const currentState = window.walletState.state;
+                if (currentState.address) {
+                    // Show "reconnect" option in UI but don't mark as connected
+                    updateWalletUIForReconnect(currentState.address);
+                }
+            }
+        }).catch(error => {
+            console.log('Could not restore wallet connection:', error.message);
+        });
+    } else {
+        // Fallback for when walletState is not available yet
+        setTimeout(() => initializeWallet(), 100);
     }
 }
 
@@ -546,11 +584,11 @@ async function connectWallet() {
         const publicKey = resp.publicKey.toString();
         
         // Update state
-        walletState.connected = true;
-        walletState.address = publicKey;
+        legacyWalletState.connected = true;
+        legacyWalletState.address = publicKey;
         
-        // Save to localStorage
-        localStorage.setItem('walletAddress', publicKey);
+        // Note: localStorage is now handled by WalletState
+        // This will be managed automatically through the adapter
         
         // Register wallet with backend
         await registerWallet(publicKey);
@@ -591,17 +629,17 @@ async function registerWallet(address) {
 async function loadWalletData() {
     if (!USE_BACKEND_API) {
         // Initialize with empty data when backend is not available
-        walletState.tokens = [];
+        legacyWalletState.tokens = [];
         return;
     }
     
     try {
         // Load wallet tokens
-        const tokens = await apiCall(`wallet/${walletState.address}/tokens`);
-        walletState.tokens = tokens || [];
+        const tokens = await apiCall(`wallet/${legacyWalletState.address}/tokens`);
+        legacyWalletState.tokens = tokens || [];
         
         // Load protection stats
-        const stats = await apiCall(`wallet/${walletState.address}/stats`);
+        const stats = await apiCall(`wallet/${legacyWalletState.address}/stats`);
         protectionState.stats = stats || protectionState.stats;
         
         updateDashboardStats();
@@ -630,15 +668,21 @@ function updateDashboardStats() {
 
 // Disconnect wallet
 function disconnectWallet() {
-    walletState.connected = false;
-    walletState.address = null;
-    walletState.balance = 0;
-    walletState.tokens = [];
+    // Use WalletState to handle disconnect which will clear all localStorage
+    if (window.walletState) {
+        window.walletState.disconnect();
+    } else if (window.walletAdapter) {
+        // Fallback to adapter
+        window.walletAdapter.disconnect();
+    }
+    
+    legacyWalletState.connected = false;
+    legacyWalletState.address = null;
+    legacyWalletState.balance = 0;
+    legacyWalletState.tokens = [];
     
     protectionState.monitoring = false;
     protectionState.activeProtections = [];
-    
-    localStorage.removeItem('walletAddress');
     
     if (window.solana) {
         window.solana.disconnect();
@@ -646,6 +690,13 @@ function disconnectWallet() {
     
     updateWalletUI();
     showNotification('Wallet disconnected', 'info');
+    
+    // Show connect wallet modal after disconnect
+    setTimeout(() => {
+        if (typeof openWalletConnectModal === 'function') {
+            openWalletConnectModal();
+        }
+    }, 500);
 }
 
 // Update wallet UI with animations
@@ -656,12 +707,12 @@ function updateWalletUI() {
     const walletStatusDesktop = document.getElementById('wallet-status-desktop');
     const walletStatusMobile = document.getElementById('wallet-status-mobile');
     
-    if (walletState.connected) {
+    if (legacyWalletState.connected) {
         // Update connect button with animation
         if (connectBtn) {
             connectBtn.classList.add('animate-fade-in');
             connectBtn.innerHTML = `
-                <span class="truncate">${formatAddress(walletState.address)}</span>
+                <span class="truncate">${formatAddress(legacyWalletState.address)}</span>
                 <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -719,6 +770,51 @@ function updateWalletUI() {
 function formatAddress(address) {
     if (!address) return '';
     return address.slice(0, 4) + '...' + address.slice(-4);
+}
+
+// Update wallet UI for reconnection state
+function updateWalletUIForReconnect(savedAddress) {
+    const connectBtn = document.getElementById('connect-wallet-btn');
+    
+    if (connectBtn) {
+        connectBtn.innerHTML = `
+            <span class="text-orange-400">Reconnect</span>
+            <span class="truncate text-xs">${formatAddress(savedAddress)}</span>
+        `;
+        connectBtn.classList.add('border-orange-500/50', 'bg-orange-500/10');
+        
+        // Add click handler to reconnect
+        connectBtn.removeEventListener('click', connectWallet);
+        connectBtn.addEventListener('click', async () => {
+            try {
+                // Try to connect using wallet adapter
+                if (window.walletAdapter) {
+                    await walletAdapter.connectWatchMode();
+                    
+                    // If successful, update state
+                    legacyWalletState.connected = true;
+                    legacyWalletState.address = walletAdapter.publicKey;
+                    updateWalletUI();
+                    loadWalletData();
+                    initializeProtectionMonitoring();
+                    
+                    showNotification('Wallet reconnected!', 'success');
+                } else {
+                    // Fallback to regular connect
+                    await connectWallet();
+                }
+            } catch (error) {
+                console.error('Reconnection failed:', error);
+                showNotification('Failed to reconnect wallet', 'error');
+                
+                // Reset to normal connect state on failure
+                connectBtn.innerHTML = 'Connect Wallet';
+                connectBtn.classList.remove('border-orange-500/50', 'bg-orange-500/10');
+                connectBtn.removeEventListener('click', arguments.callee);
+                connectBtn.addEventListener('click', connectWallet);
+            }
+        });
+    }
 }
 
 // Show wallet menu with animation
@@ -1032,10 +1128,10 @@ function updateTokenPrice(tokenAddress, price) {
 
 // Update price displays
 async function updatePriceDisplays() {
-    if (!walletState.connected || !Array.isArray(walletState.tokens) || walletState.tokens.length === 0) return;
+    if (!legacyWalletState.connected || !Array.isArray(legacyWalletState.tokens) || legacyWalletState.tokens.length === 0) return;
     
     try {
-        const prices = await apiCall(`prices/${walletState.tokens.map(t => t.address).join(',')}`);
+        const prices = await apiCall(`prices/${legacyWalletState.tokens.map(t => t.address).join(',')}`);
         Object.entries(prices).forEach(([token, price]) => {
             updateTokenPrice(token, price);
         });
@@ -1123,7 +1219,7 @@ window.protectToken = async function(tokenAddress, settings) {
         const response = await apiCall('protect', {
             method: 'POST',
             body: JSON.stringify({
-                wallet: walletState.address,
+                wallet: legacyWalletState.address,
                 token: tokenAddress,
                 settings: settings
             })
@@ -1149,5 +1245,5 @@ window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
 window.showNotification = showNotification;
 window.apiCall = apiCall;
-window.walletState = walletState;
+// window.walletState = walletState; // REMOVED: This was overwriting the proper walletState from wallet-state.js
 window.protectionState = protectionState;

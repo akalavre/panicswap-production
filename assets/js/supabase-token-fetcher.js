@@ -1,15 +1,8 @@
 // Comprehensive Supabase token data fetcher for PanicSwap dashboard
+// Now uses UnifiedTokenDataService for all data fetching
 class SupabaseTokenFetcher {
     constructor() {
-        this.cache = new Map();
-        this.cacheTimeout = 30000; // 30 seconds
-    }
-
-    /**
-     * Clear the cache to force fresh data on next fetch
-     */
-    invalidateCache() {
-        this.cache.clear();
+        // No caching - use unified service
     }
 
     /**
@@ -25,7 +18,7 @@ class SupabaseTokenFetcher {
                 return [];
             }
 
-            // First, get user's wallet tokens (including test tokens)
+            // First, get user's wallet tokens from Supabase
             const { data: walletTokens, error: walletError } = await supabaseClient
                 .from('wallet_tokens')
                 .select('*')
@@ -38,49 +31,92 @@ class SupabaseTokenFetcher {
 
             if (!walletTokens || walletTokens.length === 0) {
                 console.log('No wallet tokens found for address:', walletAddress);
-                return []; // Return empty array instead of demo tokens
+                return [];
             }
 
             // Get all token mints
             const tokenMints = walletTokens.map(wt => wt.token_mint);
             
-            // Fetch all data in parallel for efficiency
-            const [
-                metadata,
-                prices,
-                rugchecks,
-                pumpFunData,
-                protectedTokens,
-                priceHistory,
-                mlRiskData
-            ] = await Promise.all([
-                this.fetchTokenMetadata(tokenMints),
-                this.fetchTokenPrices(tokenMints),
-                this.fetchRugcheckReports(tokenMints),
-                this.fetchPumpFunMonitoring(tokenMints),
-                this.fetchProtectedTokens(walletAddress, tokenMints),
-                this.fetchLatestPriceHistory(tokenMints), // Re-enabled with fixed query
-                this.fetchMLRiskAnalysis(tokenMints)
-            ]);
-
-            // Combine all data
-            const combinedData = this.combineTokenData(
-                walletTokens,
-                metadata,
-                prices,
-                rugchecks,
-                pumpFunData,
-                protectedTokens,
-                priceHistory,
-                mlRiskData
-            );
+            // Use UnifiedTokenDataService to fetch all token data
+            const tokenDataArray = await window.getMultipleTokensData(tokenMints, walletAddress);
             
-            // Check for tokens without ML data and queue them
-            const tokensWithoutML = combinedData.filter(token => !token.has_ml_analysis);
-            if (tokensWithoutML.length > 0) {
-                console.log(`Found ${tokensWithoutML.length} tokens without ML analysis, queuing...`);
-                await this.queueTokensForMLGeneration(tokensWithoutML.map(t => t.token_mint));
-            }
+            // Create a map for easy lookup
+            const tokenDataMap = new Map(tokenDataArray.map(data => [data.tokenMint, data]));
+            
+            // Combine wallet token data with unified data
+            const combinedData = walletTokens.map(walletToken => {
+                const unifiedData = tokenDataMap.get(walletToken.token_mint) || {};
+                
+                // Calculate user's balance and value
+                const balance = parseFloat(walletToken.balance || 0);
+                const decimals = walletToken.decimals || 9;
+                const adjustedBalance = balance / Math.pow(10, decimals);
+                const price = unifiedData.price || 0;
+                const value = adjustedBalance * price;
+                
+                return {
+                    // Wallet token data
+                    wallet_address: walletToken.wallet_address,
+                    token_mint: walletToken.token_mint,
+                    balance: walletToken.balance,
+                    balance_ui: adjustedBalance,
+                    decimals: decimals,
+                    value: value,
+                    added_at: walletToken.added_at,
+                    is_test_token: walletToken.is_test_token,
+                    
+                    // Unified data (always fresh from API)
+                    symbol: unifiedData.symbol || walletToken.symbol || 'UNKNOWN',
+                    name: unifiedData.name || walletToken.name || 'Unknown Token',
+                    logo_uri: unifiedData.logoUrl || walletToken.logo_uri || walletToken.image_url,
+                    image: unifiedData.logoUrl || walletToken.logo_uri || walletToken.image_url,
+                    logo_url: unifiedData.logoUrl || walletToken.logo_uri || walletToken.image_url,
+                    price: unifiedData.price || 0,
+                    price_change_24h: unifiedData.priceChange24h || 0,
+                    price_change_5m: unifiedData.priceChange5m || 0,
+                    price_change_1m: unifiedData.priceChange1m || 0,
+                    liquidity: unifiedData.liquidity ?? null,
+                    liquidity_usd: unifiedData.liquidity ?? null,
+                    liquidity_change_24h: unifiedData.liquidityChange24h || 0,
+                    liquidity_change_5m: unifiedData.liquidityChange5m || 0,
+                    liquidity_change_1m: unifiedData.liquidityChange1m || 0,
+                    market_cap: unifiedData.marketCap || 0,
+                    volume_24h: unifiedData.volume24h || 0,
+                    holders: unifiedData.holders || 0,
+                    holder_count: unifiedData.holders || 0,
+                    risk_level: unifiedData.riskLevel || 'Unknown',
+                    risk_score: unifiedData.riskScore || 0,
+                    rug_probability: unifiedData.rugProbability || 0,
+                    protected: unifiedData.protected || false,
+                    monitoring_active: unifiedData.monitoringActive || false,
+                    active_monitors: unifiedData.activeMonitors || 0,
+                    ml_analysis: unifiedData.mlAnalysis,
+                    has_ml_analysis: !!unifiedData.mlAnalysis,
+                    patterns: unifiedData.patterns || [],
+                    developer_activity: unifiedData.developerActivity,
+                    velocity: unifiedData.velocity,
+                    pool_info: unifiedData.poolInfo,
+                    
+                    // Additional fields needed by UI
+                    metadata_status: walletToken.metadata_status || (unifiedData.symbol && unifiedData.symbol !== 'UNKNOWN' ? 'complete' : 'pending'),
+                    status: walletToken.status || 'active',
+                    is_newly_added: walletToken.is_newly_added || false,
+                    created_at: walletToken.created_at || walletToken.added_at,
+                    creator_balance_pct: unifiedData.developerActivity?.creatorBalance || 0,
+                    dev_activity_pct: unifiedData.developerActivity?.activity || 0,
+                    badge_state: unifiedData.badgeState || null,
+                    sell_signal: unifiedData.sellSignal || null,
+                    price_velocity_5m: unifiedData.priceChange5m || 0,
+                    price_velocity_1m: unifiedData.priceChange1m || 0,
+                    
+                    // Age and launch time data
+                    age: unifiedData.age || null,
+                    launch_time: unifiedData.launchTime || unifiedData.createdAt || null
+                };
+            });
+            
+            // Sort by value descending
+            combinedData.sort((a, b) => b.value - a.value);
             
             return combinedData;
 
@@ -292,51 +328,62 @@ class SupabaseTokenFetcher {
             const latestPrice = priceHistory.get(mint) || {};
             const mlData = mlRiskData ? mlRiskData.get(mint) : null;
 
-            // Calculate actual balance for value computation
+            // Use exact balance from database - NO calculations
             const decimals = walletToken.decimals || meta.decimals || 9;
-            let balance;
+            let rawBalance;
             
-            // Balance calculation logic:
-            // - raw_balance: already decimal-adjusted balance (for test tokens)
-            // - balance: raw balance from database that needs decimal adjustment
-            if (walletToken.raw_balance !== null && walletToken.raw_balance !== undefined) {
-                // raw_balance is already decimal-adjusted, use directly
-                balance = walletToken.raw_balance;
-            } else if (walletToken.balance !== null && walletToken.balance !== undefined) {
-                // balance is raw, needs decimal adjustment
-                balance = walletToken.balance / Math.pow(10, decimals);
+            // Balance logic: Use exact value from database
+            if (walletToken.balance !== null && walletToken.balance !== undefined) {
+                rawBalance = parseFloat(walletToken.balance.toString());
             } else {
-                balance = 0;
+                rawBalance = 0;
             }
+
+            const adjustedBalance = rawBalance / Math.pow(10, decimals);
             
             // Debug balance calculation
             console.log(`Balance calculation for ${mint}:`, {
-                raw_balance: walletToken.raw_balance,
+                raw_balance: walletToken.balance,
                 stored_balance: walletToken.balance,
                 wallet_decimals: walletToken.decimals,
                 meta_decimals: meta.decimals,
                 used_decimals: decimals,
                 division_factor: Math.pow(10, decimals),
-                calculated_balance: balance,
+                calculated_balance: adjustedBalance,
                 is_test_token: walletToken.is_test_token
             });
 
-            // Get best price (prefer metadata from our database)
-            let currentPrice = meta.current_price || latestPrice.price || price.price_usd || price.price || 0;
+            // Get best price (prefer most recent sources)
+            let currentPrice = latestPrice.price || price.price_usd || price.price || meta.current_price || 0;
             
             // Ensure we have a valid price
             if (!currentPrice || currentPrice === 0 || isNaN(currentPrice)) {
-                // Try other price sources or set to 0
-                currentPrice = price.current_price || rugcheck.current_price || 0;
+                // Try other price sources
+                currentPrice = price.current_price || rugcheck.current_price || meta.initial_price || 0;
+                
+                // For demo/test tokens, provide a reasonable fallback price
+                if ((currentPrice === 0 || !currentPrice) && walletToken.is_test_token) {
+                    // Set demo price based on decimals (matching the startDemo logic)
+                    if (decimals >= 9) {
+                        currentPrice = 0.0001; // $0.0001 for high-decimal tokens
+                    } else if (decimals >= 6) {
+                        currentPrice = 0.1; // $0.1 for medium-decimal tokens  
+                    } else {
+                        currentPrice = 1.0; // $1.0 for low-decimal tokens
+                    }
+                    console.log(`Applied demo token fallback price for ${mint}: $${currentPrice} (${decimals} decimals)`);
+                }
+                
+                console.log(`Using fallback price for ${mint}: ${currentPrice}`);
             }
             
             // Calculate value using the decimal-adjusted balance
-            const value = balance * currentPrice;
+            const value = adjustedBalance * currentPrice;
             
             // Debug value calculation
             console.log(`Value calculation for ${mint}:`, {
                 symbol: meta.symbol || price.symbol,
-                decimal_adjusted_balance: balance,
+                decimal_adjusted_balance: adjustedBalance,
                 raw_balance: walletToken.balance,
                 current_price: currentPrice,
                 calculated_value: value,
@@ -349,7 +396,7 @@ class SupabaseTokenFetcher {
                 },
                 value_is_zero: value === 0,
                 price_is_zero: currentPrice === 0,
-                balance_is_zero: balance === 0
+                balance_is_zero: adjustedBalance === 0
             });
 
             // Calculate age
@@ -360,14 +407,14 @@ class SupabaseTokenFetcher {
                 // Identity
                 token_mint: mint,
                 symbol: meta.symbol || price.symbol || 'Unknown',
-                name: meta.name || price.name || meta.symbol || 'Unknown Token',
+                name: meta.name || price.name || price.symbol || meta.symbol || 'Unknown Token',
                 image: meta.logo_uri || meta.logo_url || '',
                 platform: meta.platform || price.platform || 'unknown',
 
                 // Balance & Value
-                balance: balance, // Decimal-adjusted balance for calculations
-                raw_balance: walletToken.raw_balance, // Raw balance for test tokens (already adjusted)
-                original_balance: walletToken.balance, // Original raw balance from database (for display)
+                balance: adjustedBalance, // Decimal-adjusted balance for calculations
+                balance_ui: adjustedBalance, // UI-friendly balance (same as balance)
+                original_balance: walletToken.balance, // Original raw balance from database
                 decimals: decimals,
                 price: currentPrice,
                 value: value, // Calculated as: balance * currentPrice
@@ -423,7 +470,7 @@ class SupabaseTokenFetcher {
             // Debug log to see what data is being created
             console.log(`Token ${tokenData.symbol} data:`, {
                 raw_balance: walletToken.balance,
-                calculated_balance: balance,
+                calculated_balance: adjustedBalance,
                 meta_price: meta.current_price,
                 latest_price: latestPrice.price,
                 price_usd: price.price_usd,
@@ -597,7 +644,7 @@ class SupabaseTokenFetcher {
                 return {
                     token_mint: token.token_mint,
                     symbol: meta.symbol || token.symbol || 'Unknown',
-                    name: meta.name || token.name || 'Unknown Token',
+                    name: meta.name || token.name || token.symbol || meta.symbol || 'Unknown Token',
                     image: meta.logo_uri || meta.logo_url || '',
                     platform: token.platform || 'unknown',
                     balance: demoBalance,

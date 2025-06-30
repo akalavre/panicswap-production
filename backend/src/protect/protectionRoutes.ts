@@ -256,6 +256,17 @@ router.post('/swap/:walletAddress/:tokenMint', async (req: Request, res: Respons
     const { walletAddress, tokenMint } = req.params;
     const { amount, slippageBps, priorityFeeMultiplier } = req.body;
 
+    // Check if user has full protection mode (can execute swaps)
+    const { canExecuteSwaps } = await import('../utils/subscriptionUtils');
+    const canExecute = await canExecuteSwaps(walletAddress);
+    if (!canExecute) {
+      return res.status(403).json({ 
+        error: 'Full protection mode required',
+        message: 'Manual swap execution is only available for users with full protection mode enabled',
+        protection_mode: 'watch-only'
+      });
+    }
+
     // Verify token is protected
     const isProtected = await protectionService.isTokenProtected(walletAddress, tokenMint);
     if (!isProtected) {

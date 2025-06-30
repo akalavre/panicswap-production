@@ -116,9 +116,13 @@ export class EmergencyExecutor extends EventEmitter {
         throw new Error('No pre-signed transaction available');
       }
       
+      // Deserialize transaction from base64
+      const txBuffer = Buffer.from(cachedTx.transaction, 'base64');
+      const transaction = VersionedTransaction.deserialize(txBuffer);
+      
       // Validate slippage
       const validatedTx = await this.validateAndAdjustSlippage(
-        cachedTx.transaction,
+        transaction,
         request
       );
       

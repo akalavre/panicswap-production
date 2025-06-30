@@ -50,10 +50,10 @@
                         
                         <tr class="border-b border-gray-800/30">
                             <td class="py-3 px-4 text-gray-400">Token Protection Type</td>
-                            <td class="text-center py-3 px-4">Manual</td>
-                            <td class="text-center py-3 px-4">Manual</td>
-                            <td class="text-center py-3 px-4">Auto + Manual</td>
-                            <td class="text-center py-3 px-4">Full Auto</td>
+                            <td class="text-center py-3 px-4">1 token (trial)</td>
+                            <td class="text-center py-3 px-4">5 tokens</td>
+                            <td class="text-center py-3 px-4">20 tokens</td>
+                            <td class="text-center py-3 px-4">50 tokens</td>
                         </tr>
                         
                         <tr class="border-b border-gray-800/30">
@@ -122,10 +122,10 @@
                         
                         <tr class="border-b border-gray-800/30">
                             <td class="py-3 px-4 text-gray-400">Response Time</td>
-                            <td class="text-center py-3 px-4">5 seconds</td>
-                            <td class="text-center py-3 px-4">1 second</td>
-                            <td class="text-center py-3 px-4">< 500ms</td>
-                            <td class="text-center py-3 px-4">< 100ms</td>
+                            <td class="text-center py-3 px-4">N/A</td>
+                            <td class="text-center py-3 px-4">< 2s</td>
+                            <td class="text-center py-3 px-4">< 1s</td>
+                            <td class="text-center py-3 px-4">< 1s</td>
                         </tr>
                         
                         <!-- Token Limits -->
@@ -148,17 +148,6 @@
                             <td class="text-center py-3 px-4">Unlimited</td>
                         </tr>
                         
-                        <tr class="border-b border-gray-800/30">
-                            <td class="py-3 px-4 text-gray-400">Multi-Wallet Support</td>
-                            <td class="text-center py-3 px-4">
-                                <svg class="h-5 w-5 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                            </td>
-                            <td class="text-center py-3 px-4">1 wallet</td>
-                            <td class="text-center py-3 px-4">3 wallets</td>
-                            <td class="text-center py-3 px-4">Unlimited</td>
-                        </tr>
                         
                         <!-- Advanced Features -->
                         <tr class="border-b border-gray-800/50">
@@ -234,10 +223,10 @@
                         
                         <tr class="border-b border-gray-800/30">
                             <td class="py-3 px-4 text-gray-400">Alert Channels</td>
-                            <td class="text-center py-3 px-4">Email</td>
-                            <td class="text-center py-3 px-4">Email + Discord</td>
-                            <td class="text-center py-3 px-4">All Channels</td>
-                            <td class="text-center py-3 px-4">Custom Webhooks</td>
+                            <td class="text-center py-3 px-4">Email + Telegram</td>
+                            <td class="text-center py-3 px-4">Email + Telegram</td>
+                            <td class="text-center py-3 px-4">Email + Telegram</td>
+                            <td class="text-center py-3 px-4">Email + Telegram</td>
                         </tr>
                         
                         <!-- Platform Features -->
@@ -374,7 +363,7 @@
                         
                         <tr class="border-b border-gray-800/30">
                             <td class="py-3 px-4 text-gray-400">Support Level</td>
-                            <td class="text-center py-3 px-4">Community</td>
+                            <td class="text-center py-3 px-4">N/A</td>
                             <td class="text-center py-3 px-4">Email</td>
                             <td class="text-center py-3 px-4">Priority</td>
                             <td class="text-center py-3 px-4">Dedicated</td>
@@ -382,7 +371,7 @@
                         
                         <tr>
                             <td class="py-3 px-4 text-gray-400">Platform Fee</td>
-                            <td class="text-center py-3 px-4">2%</td>
+                            <td class="text-center py-3 px-4">N/A</td>
                             <td class="text-center py-3 px-4">1.5%</td>
                             <td class="text-center py-3 px-4">1%</td>
                             <td class="text-center py-3 px-4">0.5%</td>

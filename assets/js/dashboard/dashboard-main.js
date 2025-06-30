@@ -76,7 +76,7 @@ function setupEventListeners() {
         
         window.solana.on('disconnect', () => {
             console.log('Wallet disconnected');
-            localStorage.removeItem('walletAddress');
+            // Note: WalletState now handles wallet address cleanup
             
             // Cleanup subscriptions before reload
             if (typeof cleanupSubscriptions === 'function') {
@@ -103,7 +103,9 @@ function setupEventListeners() {
 
 // Load initial dashboard data
 async function loadInitialData() {
-    const walletAddress = localStorage.getItem('walletAddress');
+    // Use WalletState for wallet information
+    const walletState = window.walletState ? window.walletState.state : null;
+    const walletAddress = walletState ? walletState.address : null;
     
     if (walletAddress) {
         console.log('Loading data for wallet:', walletAddress);

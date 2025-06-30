@@ -106,6 +106,13 @@ try {
             'gasBoost' => 1.0
         ]);
         
+        // Invalidate cache and force realtime sync
+        $supabase->invalidateCache('protected_tokens', [
+            'token_mint' => $token_mint,
+            'wallet_address' => $wallet_address
+        ]);
+        $supabase->forceProtectionSync($token_mint, $wallet_address, true);
+        
         echo json_encode([
             'success' => true,
             'message' => 'Protection reactivated',
@@ -146,6 +153,13 @@ try {
             'devWalletEnabled' => true,
             'gasBoost' => 1.0
         ]);
+        
+        // Invalidate cache and force realtime sync
+        $supabase->invalidateCache('protected_tokens', [
+            'token_mint' => $token_mint,
+            'wallet_address' => $wallet_address
+        ]);
+        $supabase->forceProtectionSync($token_mint, $wallet_address, true);
             
         echo json_encode([
             'success' => true,

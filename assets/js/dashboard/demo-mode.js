@@ -89,8 +89,8 @@ function displayQuickTryTokens(container, tokens) {
     container.innerHTML = `<div class="flex gap-2 flex-wrap">${tokensHTML}</div>`;
 }
 
-// Start demo function with full validation
-async function startDemo(event) {
+// Start demo function - just populate the input field
+function startDemo(event) {
     const button = event.target;
     const tokenMint = button.getAttribute('data-mint');
     const tokenSymbol = button.getAttribute('data-symbol');
@@ -100,44 +100,23 @@ async function startDemo(event) {
         return;
     }
     
-    // Check wallet connection
-    if (!window.solana || !window.solana.isConnected) {
-        showError('Please connect your wallet first to try demo protection.');
-        return;
-    }
-
-    const currentWalletAddress = window.solana.publicKey?.toString();
-    if (!currentWalletAddress) {
-        showError('Unable to get wallet address. Please reconnect your wallet.');
-        return;
-    }
-
-    // Show loading state
-    const originalText = button.textContent;
-    button.textContent = 'Adding...';
-    button.disabled = true;
-    
-    try {
-        const input = document.querySelector('input[placeholder*="token mint"]');
-        if (input) {
-            input.value = tokenMint;
-        }
+    // Find the demo token input field and populate it
+    const input = document.getElementById('demo-token-input');
+    if (input) {
+        input.value = tokenMint;
         
-        // Call the existing addTestToken function
-        if (typeof addTestToken === 'function') {
-            await addTestToken(tokenMint, currentWalletAddress);
-        } else {
-            console.error('addTestToken function not found');
-            showError('Demo functionality not available');
-        }
+        // Add visual feedback
+        input.focus();
+        input.classList.add('border-green-500');
         
-    } catch (error) {
-        console.error('Error in startDemo:', error);
-        showError('Failed to start demo: ' + error.message);
-    } finally {
-        // Reset button state
-        button.textContent = originalText;
-        button.disabled = false;
+        // Remove the highlight after a short delay
+        setTimeout(() => {
+            input.classList.remove('border-green-500');
+        }, 2000);
+        
+        console.log(`Auto-filled token mint: ${tokenMint} (${tokenSymbol})`);
+    } else {
+        console.error('Demo token input field not found');
     }
 }
 

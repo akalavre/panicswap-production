@@ -4,7 +4,8 @@ import { Connection } from '@solana/web3.js';
 export interface SwapAlert {
   type: 'swap_failed' | 'swap_delayed' | 'protection_failed' | 'key_missing' | 'rugpull_detected' | 
         'predictive_rugpull' | 'velocity_warning' | 'liquidity_critical' | 'pattern_detected' |
-        'pre_rug_warning' | 'flash_rug_imminent' | 'coordinated_dump_detected' | 'honeypot_detected';
+        'pre_rug_warning' | 'flash_rug_imminent' | 'coordinated_dump_detected' | 'honeypot_detected' |
+        'rugpull_detected_watch_only' | 'sell_signal' | 'panic_sell_signal';
   severity: 'low' | 'medium' | 'high' | 'critical';
   priority?: number; // 1-10, with 10 being highest priority
   wallet_address: string;
@@ -407,8 +408,12 @@ export class AlertingService {
 
       let message = '';
       
+      // Special formatting for sell signal alerts
+      if (alert.type === 'sell_signal' || alert.type === 'panic_sell_signal') {
+        message = this.formatSellSignalForTelegram(alert);
+      }
       // Special formatting for pattern-based alerts
-      if (alert.type === 'pattern_detected' || alert.type === 'flash_rug_imminent' || 
+      else if (alert.type === 'pattern_detected' || alert.type === 'flash_rug_imminent' || 
           alert.type === 'coordinated_dump_detected' || alert.type === 'honeypot_detected' ||
           alert.type === 'pre_rug_warning') {
         message = this.formatPatternAlertForTelegram(alert);
@@ -680,6 +685,76 @@ export class AlertingService {
       },
       metadata: { patterns, analysis }
     });
+  }
+  
+  /**
+   * Format sell signal alerts for Telegram
+   */
+  private formatSellSignalForTelegram(alert: SwapAlert): string {
+    const isPanic = alert.type === 'panic_sell_signal';
+    const emoji = isPanic ? '🚨🔴' : '⚠️🟠';
+    const action = isPanic ? 'SELL NOW' : 'SELL';
+    
+    let message = `${emoji} <b>${action} SIGNAL!</b> ${emoji}\n\n`;
+    
+    const symbol = alert.metadata?.token_symbol || 'Unknown';
+    const name = alert.metadata?.token_name || 'Unknown Token';
+    const shortToken = alert.token_mint.substring(0, 8) + '...';
+    const shortWallet = alert.wallet_address.substring(0, 4) + '...' + alert.wallet_address.substring(alert.wallet_address.length - 4);
+    
+    message += `🪙 <b>Token</b>: ${symbol} (${name})\n`;
+    message += `📍 <b>Contract</b>: <code>${shortToken}</code>\n`;
+    message += `👛 <b>Your Wallet</b>: <code>${shortWallet}</code>\n\n`;
+    
+    // Add sell signal details
+    if (alert.metadata?.sellSignal) {
+      const signal = alert.metadata.sellSignal;
+      message += `📊 <b>Confidence</b>: ${signal.confidence}%\n`;
+      message += `📝 <b>Reason</b>: ${signal.reason}\n`;
+      message += `⚡ <b>Urgency</b>: ${signal.urgency?.toUpperCase() || 'HIGH'}\n\n`;
+    }
+    
+    // Add velocity data if available
+    if (alert.metadata?.velocities) {
+      const vel = alert.metadata.velocities;
+      message += `📉 <b>Market Data:</b>\n`;
+      if (vel.liquidity5m !== undefined) {
+        message += `   • Liquidity 5m: ${vel.liquidity5m > 0 ? '+' : ''}${vel.liquidity5m.toFixed(1)}%\n`;
+      }
+      if (vel.price5m !== undefined) {
+        message += `   • Price 5m: ${vel.price5m > 0 ? '+' : ''}${vel.price5m.toFixed(1)}%\n`;
+      }
+      if (vel.creator5m !== undefined && vel.creatorBalance !== undefined) {
+        message += `   • Creator selling: ${Math.abs(vel.creator5m).toFixed(1)}% (${vel.creatorBalance.toFixed(1)}% left)\n`;
+      }
+      message += '\n';
+    }
+    
+    // Add current price/liquidity if available
+    if (alert.metadata?.currentData) {
+      const data = alert.metadata.currentData;
+      if (data.price) {
+        message += `💵 <b>Price</b>: $${data.price.toFixed(6)}\n`;
+      }
+      if (data.liquidity) {
+        message += `💧 <b>Liquidity</b>: $${data.liquidity.toLocaleString()}\n`;
+      }
+      message += '\n';
+    }
+    
+    // Action message
+    if (isPanic) {
+      message += `🚨 <b>ACTION REQUIRED</b>: EXIT IMMEDIATELY!\n`;
+      message += `💡 This is a critical sell signal - liquidity is collapsing or creator is dumping.\n`;
+    } else {
+      message += `⚠️ <b>Recommendation</b>: Consider exiting your position.\n`;
+      message += `💡 Market conditions suggest high risk of price decline.\n`;
+    }
+    
+    message += `\n⏱️ <b>Time</b>: ${new Date().toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
+    message += `\n\n<i>PanicSwap Exit Signal System</i>`;
+    
+    return message;
   }
   
   /**

@@ -4,10 +4,9 @@
 // Enables/disables protection for all wallet tokens and manages wallet_auto_protection setting
 
 // Ensure we output JSON even if there's an error
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/../../logs/bulk-toggle-debug.log');
 
 // Set up error handler to catch any errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
@@ -16,7 +15,9 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
     echo json_encode([
         'success' => false,
         'error' => 'PHP Error',
-        'message' => $errstr
+        'message' => $errstr,
+        'file' => basename($errfile),
+        'line' => $errline
     ]);
     exit;
 });
@@ -32,10 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Check if config file exists
-$configPath = __DIR__ . '/../../supabase-config.php';
+$configPath = __DIR__ . '/../supabase-config.php';
 if (!file_exists($configPath)) {
     http_response_code(500);
-    echo json_encode(['error' => 'Configuration file not found']);
+    echo json_encode(['error' => 'Configuration file not found at: ' . $configPath]);
     exit;
 }
 
@@ -75,25 +76,45 @@ try {
     $supabase = new SupabaseClient(true);
     error_log('[bulk-toggle] SupabaseClient created successfully');
     
-    // First, update or create wallet_auto_protection record
-    $walletAutoProtection = $supabase->query('wallet_auto_protection', [
+    // First, update or create wallet_auto_protection record using upsert
+    $walletProtectionData = [
+        'wallet_address' => $walletAddress,
+        'enabled' => $enabled,
+        'updated_at' => (new DateTime())->format('Y-m-d H:i:s')
+    ];
+    
+    // Check if record exists
+    $existing = $supabase->query('wallet_auto_protection', [
         'wallet_address' => 'eq.' . $walletAddress
     ]);
     
-    if ($walletAutoProtection && count($walletAutoProtection) > 0) {
-        // Update existing record
-        $result = $supabase->update('wallet_auto_protection', $walletAutoProtection[0]['id'], [
-            'enabled' => $enabled,
-            'updated_at' => (new DateTime())->format('Y-m-d H:i:s')
-        ]);
+    if ($existing && count($existing) > 0) {
+        // Update existing record using direct API call
+        $url = SUPABASE_URL . '/rest/v1/wallet_auto_protection?wallet_address=eq.' . $walletAddress;
+        $headers = [
+            'apikey: ' . SUPABASE_SERVICE_KEY,
+            'Authorization: Bearer ' . SUPABASE_SERVICE_KEY,
+            'Content-Type: application/json',
+            'Prefer: return=representation'
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($walletProtectionData));
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        $result = ($httpCode >= 200 && $httpCode < 300);
     } else {
         // Create new record
-        $result = $supabase->insert('wallet_auto_protection', [
-            'wallet_address' => $walletAddress,
-            'enabled' => $enabled,
-            'created_at' => (new DateTime())->format('Y-m-d H:i:s'),
-            'updated_at' => (new DateTime())->format('Y-m-d H:i:s')
-        ]);
+        $walletProtectionData['created_at'] = (new DateTime())->format('Y-m-d H:i:s');
+        $result = $supabase->insert('wallet_auto_protection', $walletProtectionData);
     }
     
     if (!$result) {
@@ -131,6 +152,13 @@ try {
         if ($existing && count($existing) > 0) {
             // Update all existing records
             foreach ($existing as $record) {
+                // Check if id exists
+                if (!isset($record['id'])) {
+                    error_log('[bulk-toggle] Warning: No id field in protected_tokens record for token ' . $tokenMint);
+                    error_log('[bulk-toggle] Record keys: ' . implode(', ', array_keys($record)));
+                    continue;
+                }
+                
                 $result = $supabase->update('protected_tokens', $record['id'], [
                     'monitoring_enabled' => $enabled,
                     'is_active' => $enabled,

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     stripe_subscription_id VARCHAR(255), -- For Stripe subscription ID
     stripe_customer_id VARCHAR(255), -- For Stripe customer ID
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'cancelled', 'failed')),
+    protection_mode VARCHAR(20) DEFAULT 'watch-only' CHECK (protection_mode IN ('full', 'watch-only')), -- Protection mode: full enables swaps, watch-only only alerts
     features JSONB DEFAULT '{}', -- Store plan features as JSON
     expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

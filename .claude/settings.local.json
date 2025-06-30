@@ -72,7 +72,13 @@
       "Bash(git push:*)",
       "mcp__digitalocean__list_deployments",
       "mcp__digitalocean__create_deployment",
-      "mcp__supabase__get_organization"
+      "mcp__supabase__get_organization",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.phantom.com)",
+      "WebFetch(domain:github.com)",
+      "mcp__digitalocean__validate_app_spec",
+      "Bash(awk:*)",
+      "Bash(kill:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

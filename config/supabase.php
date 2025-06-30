@@ -73,6 +73,24 @@ class QueryBuilder {
         return $this;
     }
     
+    // Add IN filter support (e.g., ->in('id', ['a', 'b']) => in.("a","b") )
+    public function in($column, $values) {
+        if (is_array($values)) {
+            // Quote each value and join with commas per PostgREST spec
+            $encodedValues = array_map(function($v) {
+                // Escape quotes inside value
+                $v = str_replace('"', '\\"', $v);
+                return '"' . $v . '"';
+            }, $values);
+            $valueString = '(' . implode(',', $encodedValues) . ')';
+        } else {
+            // Single string – still wrap in parentheses
+            $valueString = '("' . str_replace('"', '\\"', $values) . '")';
+        }
+        $this->query[$column] = 'in.' . $valueString;
+        return $this;
+    }
+    
     public function single() {
         $this->isSingle = true;
         return $this;

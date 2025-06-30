@@ -1,0 +1,128 @@
+=== PanicSwap Deployment Commands for DigitalOcean ===
+
+OPTION 1: One-Line Remote Deployment (Recommended)
+-------------------------------------------------
+Copy and paste this command in your droplet's SSH terminal:
+
+curl -fsSL https://raw.githubusercontent.com/akalavre/PanicSwap-php/main/remote-deploy.sh | sudo bash
+
+
+OPTION 2: Manual Step-by-Step Deployment
+----------------------------------------
+SSH into your droplet and run these commands:
+
+# 1. Connect to droplet
+ssh root@157.230.227.111
+
+# 2. Download and run the deployment script
+cd /tmp
+wget https://raw.githubusercontent.com/akalavre/PanicSwap-php/main/remote-deploy.sh
+chmod +x remote-deploy.sh
+./remote-deploy.sh
+
+
+OPTION 3: Quick Setup with Direct Commands
+------------------------------------------
+Run these commands directly in your droplet:
+
+# Update system and install Docker
+apt update && apt upgrade -y
+curl -fsSL https://get.docker.com | sh
+curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# Download PanicSwap
+mkdir -p /opt/panicswap && cd /opt/panicswap
+wget -O panicswap.tar.gz https://github.com/akalavre/PanicSwap-php/archive/refs/heads/main.tar.gz
+tar -xzf panicswap.tar.gz --strip-components=1
+rm panicswap.tar.gz
+
+# Setup environment
+cp .env.example .env.production
+cp .env.production .env
+mkdir -p backend && cp .env backend/.env
+
+# Build and start
+docker-compose -f docker-compose.production.yml build
+docker-compose -f docker-compose.production.yml up -d
+
+
+OPTION 4: Using DigitalOcean App Platform
+-----------------------------------------
+If you prefer using DigitalOcean's managed services:
+
+1. Fork the repository to your GitHub account
+2. Go to DigitalOcean App Platform
+3. Create New App → Choose GitHub repository
+4. Configure environment variables in the App Platform UI
+5. Deploy
+
+
+IMPORTANT ENVIRONMENT VARIABLES TO CONFIGURE
+--------------------------------------------
+After deployment, edit /opt/panicswap/.env with your actual values:
+
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_KEY
+- HELIUS_API_KEY
+- HELIUS_RPC_URL
+- STRIPE_SECRET_KEY
+- STRIPE_PUBLISHABLE_KEY
+- STRIPE_WEBHOOK_SECRET
+- UPSTASH_REDIS_REST_URL
+- UPSTASH_REDIS_REST_TOKEN
+- TELEGRAM_BOT_TOKEN
+- ALCHEMY_RPC_URL (if using Alchemy as fallback)
+
+
+POST-DEPLOYMENT CHECKLIST
+-------------------------
+1. Configure environment variables:
+   nano /opt/panicswap/.env
+
+2. Restart the application:
+   cd /opt/panicswap
+   docker-compose -f docker-compose.production.yml restart
+
+3. Check logs:
+   docker-compose -f docker-compose.production.yml logs -f
+
+4. Verify services are running:
+   docker-compose -f docker-compose.production.yml ps
+
+5. Test the application:
+   curl http://157.230.227.111
+
+6. Set up SSL (optional):
+   certbot --nginx -d yourdomain.com
+
+7. Monitor the application:
+   panicswap-status
+
+
+TROUBLESHOOTING
+---------------
+If deployment fails:
+
+1. Check Docker installation:
+   docker --version
+   docker-compose --version
+
+2. Check service logs:
+   journalctl -u panicswap -f
+
+3. Check container logs:
+   docker logs panicswap-frontend
+   docker logs panicswap-backend
+
+4. Verify ports are open:
+   netstat -tlnp | grep -E '80|443|3001'
+
+5. Check firewall:
+   ufw status
+
+
+QUICK HEALTH CHECK
+------------------
+After deployment, run:
+curl http://157.230.227.111/api/health

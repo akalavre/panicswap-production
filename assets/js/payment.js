@@ -4,13 +4,21 @@ const SOLANA_RPC = window.PaymentConfig?.SOLANA_RPC || "https://api.mainnet-beta
 const MERCHANT_WALLET = window.PaymentConfig?.MERCHANT_WALLET || "5kUXfkUbawYtMxvGJtfcZXDgf5FJ7YnxDqki9QMEiMtB";
 const SOL_PRICE = window.PaymentConfig?.SOL_PRICE || 140;
 const PLANS = window.PaymentConfig?.PLANS || {
+    basic: {
+        name: 'Basic',
+        solPrice: 0,
+        usdPrice: 0,
+        weeklySOL: 0,
+        weeklyUSD: 0,
+        features: '1 token, Telegram alerts, < 5s response'
+    },
     pro: {
         name: 'Pro',
         solPrice: 0.56,
         usdPrice: 79,
         weeklySOL: 0.141,
         weeklyUSD: 19.75,
-        features: 'Up to 50 tokens, < 2s response'
+        features: '5 tokens, < 2s response, Telegram alerts'
     },
     degen: {
         name: 'Degen Mode',
@@ -18,7 +26,7 @@ const PLANS = window.PaymentConfig?.PLANS || {
         usdPrice: 149,
         weeklySOL: 0.266,
         weeklyUSD: 37.25,
-        features: 'Up to 100 tokens, < 1s response, Pump.fun'
+features: '10 tokens, < 1s response, Telegram alerts'
     },
     enterprise: {
         name: 'Enterprise',
@@ -26,7 +34,7 @@ const PLANS = window.PaymentConfig?.PLANS || {
         usdPrice: 399,
         weeklySOL: 0.713,
         weeklyUSD: 99.75,
-        features: 'Unlimited tokens, all DEXs, dedicated support'
+features: '25 tokens, all DEXs, dedicated support, Telegram alerts'
     }
 };
 
@@ -45,11 +53,33 @@ function initializePaymentModal() {
     const modal = document.getElementById('payment-modal');
     const backdrop = document.getElementById('payment-modal-backdrop');
     const closeBtn = document.getElementById('close-payment-modal');
+    const modalContent = document.getElementById('payment-modal-content');
     
-    // Close modal handlers
-    [backdrop, closeBtn].forEach(element => {
-        if (element) {
-            element.addEventListener('click', closePaymentModal);
+    // Close modal handlers (cancel path)
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closePaymentModal);
+    }
+    
+    // Backdrop click to cancel - only close if clicked directly on backdrop
+    if (backdrop) {
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) {
+                closePaymentModal();
+            }
+        });
+    }
+    
+    // Stop propagation on modal content to avoid accidental cancel
+    if (modalContent) {
+        modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    // ESC key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closePaymentModal();
         }
     });
     
@@ -182,7 +212,8 @@ function closePaymentModal() {
 function updatePaymentSection() {
     const solSection = document.getElementById('sol-payment-section');
     const usdSection = document.getElementById('usd-payment-section');
-    const walletType = localStorage.getItem('walletType');
+    const walletState = window.walletState ? window.walletState.state : null;
+    const walletType = walletState ? walletState.mode : null;
     
     if (selectedPaymentMethod === 'sol') {
         solSection.classList.remove('hidden');
@@ -237,18 +268,17 @@ async function connectWallet() {
         }
         
         // Show auto-renewal consent for hot wallets
-        const walletType = localStorage.getItem('walletType');
-        if (autoRenewalConsent && walletType === 'hot') {
+        const walletState = window.walletState ? window.walletState.state : null;
+        const walletType = walletState ? walletState.mode : null;
+        if (autoRenewalConsent && walletType === 'full') {
             autoRenewalConsent.classList.remove('hidden');
             // Default to checked for hot wallets
             const checkbox = document.getElementById('auto-renew-checkbox');
             if (checkbox) checkbox.checked = true;
         }
         
-        // Store wallet preference
-        localStorage.setItem('preferredWallet', walletModal);
-        localStorage.setItem('connectedWallet', publicKey);
-        localStorage.setItem('walletAddress', publicKey);
+        // Note: Wallet preference storage is now handled by WalletState
+        // The adapter will manage these automatically
         
         // Check wallet balance
         await checkWalletBalance();
@@ -271,8 +301,7 @@ async function disconnectWallet() {
     publicKey = null;
     provider = null;
     
-    // Clear stored data
-    localStorage.removeItem('connectedWallet');
+    // Note: localStorage clearing is now handled by WalletState
     
     // Update UI
     document.getElementById('wallet-not-connected').classList.remove('hidden');
@@ -281,17 +310,18 @@ async function disconnectWallet() {
 
 async function checkWalletBalance() {
     try {
-        // Use the public key from localStorage if walletAdapter not ready
-        const walletPubkey = publicKey || localStorage.getItem('walletAddress');
-        const walletType = localStorage.getItem('walletType');
+        // Use the public key from WalletState if walletAdapter not ready
+        const walletState = window.walletState ? window.walletState.state : null;
+        const walletPubkey = publicKey || (walletState ? walletState.address : null);
+        const walletType = walletState ? walletState.mode : null;
         
         if (!walletPubkey) {
             console.error('No wallet address available');
             return false;
         }
         
-        // For hot wallets, skip balance check (backend will handle it)
-        if (walletType === 'hot') {
+        // For full protection wallets, skip balance check (backend will handle it)
+        if (walletType === 'full') {
             const balanceDisplay = document.getElementById('wallet-balance');
             if (balanceDisplay) {
                 balanceDisplay.textContent = 'Hot wallet';
@@ -314,8 +344,8 @@ async function checkWalletBalance() {
                 solBalance = lamports / solanaWeb3.LAMPORTS_PER_SOL;
             } catch (rpcError) {
                 console.warn('RPC error getting balance:', rpcError);
-                // For hot wallets, assume they have balance
-                if (walletType === 'hot') {
+                // For full protection wallets, assume they have balance
+                if (walletType === 'full') {
                     solBalance = 10; // Assume enough balance
                 } else {
                     throw rpcError;
@@ -347,17 +377,18 @@ async function checkWalletBalance() {
 
 // Process SOL Payment
 async function processSOLPayment() {
-    // Check for wallet connection (either browser wallet or hot wallet)
-    const walletAddress = publicKey || localStorage.getItem('walletAddress') || window.walletAdapter?.publicKey;
-    const walletType = localStorage.getItem('walletType');
+    // Check for wallet connection using WalletState
+    const walletState = window.walletState ? window.walletState.state : null;
+    const walletAddress = publicKey || (walletState ? walletState.address : null) || window.walletAdapter?.publicKey;
+    const walletType = walletState ? walletState.mode : null;
     
     if (!walletAddress) {
         showNotification('Please connect your wallet first', 'error');
         return;
     }
     
-    // For hot wallets, we need to handle the payment differently
-    if (walletType === 'hot') {
+    // For full protection wallets, we need to handle the payment differently
+    if (walletType === 'full') {
         await processHotWalletPayment(walletAddress);
         return;
     }
@@ -422,8 +453,9 @@ async function processSOLPayment() {
 
 // Process Stripe Payment
 async function processStripePayment() {
-    // Check if wallet is connected for USD payment
-    const walletAddress = publicKey || localStorage.getItem('connectedWallet');
+    // Check if wallet is connected for USD payment using WalletState
+    const walletState = window.walletState ? window.walletState.state : null;
+    const walletAddress = publicKey || (walletState ? walletState.address : null);
     
     if (!walletAddress) {
         // Show wallet connection prompt
@@ -464,7 +496,7 @@ async function processStripePayment() {
         
         if (data.success) {
             if (data.url) {
-                // Save session ID for tracking
+                // Note: Session tracking could be handled by a separate state manager if needed
                 localStorage.setItem('stripe_session_id', data.sessionId);
                 // Redirect to Stripe checkout
                 window.location.href = data.url;

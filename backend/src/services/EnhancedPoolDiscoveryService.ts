@@ -291,8 +291,6 @@ class EnhancedPoolDiscoveryService {
       const data = await fetchWithFallback(
         `https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`,
         {
-          cacheKey: `dexscreener:${tokenMint}`,
-          cacheTTL: 300, // 5 minutes
           serviceName: 'dexscreener-api',
           timeout: 10000,
           fallbackData: null,

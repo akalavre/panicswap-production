@@ -22,7 +22,7 @@ if (!$tokenMint) {
 
 try {
     // Initialize Supabase client
-    $supabase = getSupabaseClient();
+    $supabase = Supabase\getSupabaseClient();
     
     // Fetch comprehensive risk data
     $rugcheckResponse = $supabase->from('rugcheck_reports')

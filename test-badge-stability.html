@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badge Stability Test - PanicSwap</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/custom.css">
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-8">
+        <h1 class="text-3xl font-bold mb-8">Badge Stability Test</h1>
+        
+        <div class="mb-4">
+            <label class="block mb-2">Test Token Mint:</label>
+            <input id="tokenMint" type="text" 
+                   value="So11111111111111111111111111111111111111112" 
+                   class="w-full p-2 rounded bg-gray-800 text-white"
+                   placeholder="Enter token mint address">
+        </div>
+        
+        <div class="mb-4">
+            <label class="block mb-2">Wallet Address:</label>
+            <input id="walletAddress" type="text" 
+                   value="test-wallet" 
+                   class="w-full p-2 rounded bg-gray-800 text-white"
+                   placeholder="Enter wallet address">
+        </div>
+        
+        <div class="flex gap-4 mb-8">
+            <button onclick="startTest()" class="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600">
+                Start Badge Test
+            </button>
+            <button onclick="clearTest()" class="px-4 py-2 bg-red-500 rounded hover:bg-red-600">
+                Clear Test
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 gap-4">
+            <div class="bg-gray-800 p-4 rounded">
+                <h3 class="text-xl font-semibold mb-2">Badge Display</h3>
+                <div id="badgeContainer">
+                    <span data-risk-badge="test-token"></span>
+                </div>
+            </div>
+            
+            <div class="bg-gray-800 p-4 rounded">
+                <h3 class="text-xl font-semibold mb-2">Badge History</h3>
+                <div id="badgeHistory" class="space-y-2 max-h-64 overflow-y-auto">
+                    <!-- Badge state changes will be logged here -->
+                </div>
+            </div>
+            
+            <div class="bg-gray-800 p-4 rounded">
+                <h3 class="text-xl font-semibold mb-2">API Responses</h3>
+                <div id="apiLog" class="space-y-2 max-h-96 overflow-y-auto text-xs font-mono">
+                    <!-- API responses will be logged here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Include Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Initialize Supabase
+        const { createClient } = supabase;
+        const supabaseUrl = '<?= getenv('SUPABASE_URL') ?: 'https://cfficjjdhgqwqprfhlrj.supabase.co' ?>';
+        const supabaseAnonKey = '<?= getenv('SUPABASE_ANON_KEY') ?: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0ODIzNzIsImV4cCI6MjA1MDA1ODM3Mn0.tnmldG9lxeOJFVAH8Kq0Zi-rYJ7nXQmpJNBNy1YDRBU' ?>';
+        window.supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    </script>
+    
+    <!-- Include services -->
+    <script src="assets/js/unified-badge-service.js"></script>
+    <script src="assets/js/unified-token-data-service.js"></script>
+    
+    <script>
+        let testInterval = null;
+        let badgeObserver = null;
+        let requestCount = 0;
+        
+        async function startTest() {
+            const tokenMint = document.getElementById('tokenMint').value;
+            const walletAddress = document.getElementById('walletAddress').value;
+            
+            if (!tokenMint || !walletAddress) {
+                alert('Please enter both token mint and wallet address');
+                return;
+            }
+            
+            // Update badge container
+            document.getElementById('badgeContainer').innerHTML = `<span data-risk-badge="${tokenMint}"></span>`;
+            
+            // Clear previous logs
+            document.getElementById('badgeHistory').innerHTML = '';
+            document.getElementById('apiLog').innerHTML = '';
+            requestCount = 0;
+            
+            // Set up mutation observer to track badge changes
+            if (badgeObserver) badgeObserver.disconnect();
+            
+            const badgeContainer = document.querySelector(`[data-risk-badge="${tokenMint}"]`);
+            badgeObserver = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                        const badge = badgeContainer.querySelector('.unified-badge');
+                        if (badge) {
+                            const state = badge.getAttribute('data-badge-state') || 'Loading';
+                            const text = badge.textContent.trim();
+                            logBadgeChange(state, text);
+                        }
+                    }
+                });
+            });
+            
+            badgeObserver.observe(badgeContainer, {
+                childList: true,
+                attributes: true,
+                subtree: true
+            });
+            
+            // Initial render
+            window.UnifiedBadgeService.renderBadge(tokenMint);
+            
+            // Start fetching data
+            await fetchAndUpdate(tokenMint, walletAddress);
+            
+            // Set up interval to simulate real-time updates
+            if (testInterval) clearInterval(testInterval);
+            testInterval = setInterval(async () => {
+                await fetchAndUpdate(tokenMint, walletAddress);
+            }, 5000); // Update every 5 seconds
+        }
+        
+        async function fetchAndUpdate(tokenMint, walletAddress) {
+            requestCount++;
+            const startTime = Date.now();
+            
+            try {
+                // Use the unified service
+                const service = new UnifiedTokenDataService();
+                const data = await service.getTokenData(tokenMint, walletAddress);
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                logApiResponse(requestCount, data, duration);
+                
+                // Update badge through the service
+                if (data) {
+                    window.UnifiedBadgeService.updateToken(tokenMint, data);
+                }
+            } catch (error) {
+                logApiResponse(requestCount, { error: error.message }, Date.now() - startTime);
+            }
+        }
+        
+        function logBadgeChange(state, text) {
+            const history = document.getElementById('badgeHistory');
+            const entry = document.createElement('div');
+            entry.className = 'flex justify-between items-center p-2 bg-gray-700 rounded';
+            entry.innerHTML = `
+                <span class="text-sm">${new Date().toLocaleTimeString()}</span>
+                <span class="font-medium">${state || 'Unknown'}</span>
+                <span class="text-xs text-gray-400">${text}</span>
+            `;
+            history.insertBefore(entry, history.firstChild);
+        }
+        
+        function logApiResponse(count, data, duration) {
+            const apiLog = document.getElementById('apiLog');
+            const entry = document.createElement('div');
+            entry.className = 'p-2 bg-gray-700 rounded';
+            
+            const badgeInfo = data ? {
+                badgeState: data.badgeState,
+                hasCompleteData: data.hasCompleteData,
+                price: data.price,
+                liquidity: data.liquidity,
+                monitoringActive: data.monitoringActive,
+                isNewlyAdded: data.isNewlyAdded,
+                dataAge: data.dataAge
+            } : {};
+            
+            entry.innerHTML = `
+                <div class="text-xs text-gray-400">Request #${count} - ${new Date().toLocaleTimeString()} (${duration}ms)</div>
+                <pre class="text-xs mt-1">${JSON.stringify(badgeInfo, null, 2)}</pre>
+            `;
+            apiLog.insertBefore(entry, apiLog.firstChild);
+        }
+        
+        function clearTest() {
+            if (testInterval) {
+                clearInterval(testInterval);
+                testInterval = null;
+            }
+            
+            if (badgeObserver) {
+                badgeObserver.disconnect();
+                badgeObserver = null;
+            }
+            
+            document.getElementById('badgeContainer').innerHTML = '<span data-risk-badge="test-token"></span>';
+            document.getElementById('badgeHistory').innerHTML = '';
+            document.getElementById('apiLog').innerHTML = '';
+            
+            window.UnifiedBadgeService.clearAll();
+        }
+        
+        // Helper for multiple tokens data fetch
+        window.getMultipleTokensData = async function(tokenMints, walletAddress) {
+            const service = new UnifiedTokenDataService();
+            return service.getMultipleTokensData(tokenMints, walletAddress);
+        };
+    </script>
+</body>
+</html>

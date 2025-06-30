@@ -1,265 +1,146 @@
 <!-- Wallet Connection Button Component -->
-<div id="wallet-button-container" class="relative">
+<div 
+    id="wallet-button-container" 
+    class="relative"
+    data-wallet-connected="false"
+    data-wallet-address=""
+>
     <!-- Not Connected State -->
-    <button id="header-connect-wallet" class="btn btn-primary btn-sm flex items-center space-x-2" onclick="openWalletConnectModal()">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <button 
+        data-wallet-element="connect-button"
+        class="relative group flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium rounded-xl transition-all duration-200 transform hover:scale-[1.02] shadow-lg shadow-primary-500/20" 
+        onclick="openWalletConnectModal()"
+    >
+        <div class="absolute inset-0 bg-gradient-to-r from-primary-400 to-primary-500 rounded-xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity"></div>
+        <svg class="w-5 h-5 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
         </svg>
-        <span>Connect Wallet</span>
+        <span class="relative">Connect Wallet</span>
     </button>
     
     <!-- Connected State -->
-    <div id="header-wallet-connected" class="hidden" style="display: none;">
-        <button class="flex items-center space-x-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-all">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 position-relative">
-                <span id="wallet-type-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size: 10px; display: none;">
-                    HOT
-                </span>
+    <div 
+        data-wallet-element="connected-container"
+        class="hidden"
+    >
+        <button 
+            data-wallet-element="connected-button"
+            class="relative group flex items-center gap-3 px-4 py-2.5 bg-gray-900/90 hover:bg-gray-800/90 border border-gray-800 hover:border-gray-700 rounded-xl transition-all duration-200"
+        >
+            <!-- Wallet Identicon -->
+            <div class="relative flex-shrink-0">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600 p-[2px]">
+                    <div class="w-full h-full rounded-full bg-gray-900 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-primary-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
             </div>
-            <div class="text-left">
-                <p class="text-xs text-gray-400" id="wallet-connection-type">Connected</p>
-                <p class="text-sm font-mono text-white" id="header-wallet-address">...</p>
+            
+            <!-- Wallet Info -->
+            <div class="text-left flex-1">
+                <p 
+                    data-wallet-element="balance-display" 
+                    class="text-sm font-semibold text-white"
+                >
+                    0.0000 SOL
+                </p>
+                <p 
+                    data-wallet-element="address-display" 
+                    class="text-xs font-mono text-gray-400"
+                >
+                    ...
+                </p>
             </div>
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            
+            <!-- Dropdown Arrow -->
+            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
         </button>
         
         <!-- Dropdown Menu -->
-        <div id="wallet-dropdown" class="hidden absolute right-0 mt-2 w-64 rounded-lg bg-gray-900 border border-gray-800 shadow-xl">
-            <div class="p-4 border-b border-gray-800">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-gray-400">Balance</span>
-                    <span class="text-sm font-medium text-white" id="header-wallet-balance">0.0000 SOL</span>
+        <div 
+            data-wallet-element="dropdown" 
+            class="hidden absolute right-0 mt-2 w-72 rounded-xl bg-gray-900/95 backdrop-blur-lg border border-gray-800 shadow-2xl overflow-hidden"
+        >
+            <!-- Wallet Header -->
+            <div class="p-4 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-800">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600 p-[2px]">
+                        <div class="w-full h-full rounded-full bg-gray-900 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-primary-400" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-white">Wallet Connected</p>
+                        <p data-wallet-element="address-display-full" class="text-xs font-mono text-gray-400 truncate">...</p>
+                    </div>
                 </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-400">Network</span>
-                    <span class="text-sm font-medium text-green-400">Mainnet</span>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-gray-800/50 rounded-lg p-2 text-center">
+                        <p class="text-gray-400 text-xs">Balance</p>
+                        <p data-wallet-element="balance-display-dropdown" class="font-semibold text-white">0.00 SOL</p>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-2 text-center">
+                        <p class="text-gray-400 text-xs">Network</p>
+                        <p class="font-semibold text-green-400">Mainnet</p>
+                    </div>
                 </div>
             </div>
+            <!-- Menu Items -->
             <div class="p-2">
-                <button id="header-copy-address" class="w-full text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors flex items-center space-x-2">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                    </svg>
-                    <span class="text-sm">Copy Address</span>
+                <button 
+                    data-wallet-element="copy-address" 
+                    class="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-800/50 transition-all flex items-center gap-3 group"
+                >
+                    <div class="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center group-hover:bg-primary-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-gray-400 group-hover:text-primary-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-sm text-gray-300 group-hover:text-white transition-colors">Copy Address</span>
                 </button>
-                <button id="header-view-explorer" class="w-full text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors flex items-center space-x-2">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                    </svg>
-                    <span class="text-sm">View on Explorer</span>
+                
+                <button 
+                    data-wallet-element="view-explorer" 
+                    class="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-800/50 transition-all flex items-center gap-3 group"
+                >
+                    <div class="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center group-hover:bg-primary-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-gray-400 group-hover:text-primary-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </div>
+                    <span class="text-sm text-gray-300 group-hover:text-white transition-colors">View on Solscan</span>
                 </button>
-                <a href="subscription.php" class="w-full text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors flex items-center space-x-2">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-                    </svg>
-                    <span class="text-sm">Subscription</span>
+                
+                <a href="/dashboard" class="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-800/50 transition-all flex items-center gap-3 group">
+                    <div class="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center group-hover:bg-primary-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-gray-400 group-hover:text-primary-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                    </div>
+                    <span class="text-sm text-gray-300 group-hover:text-white transition-colors">Dashboard</span>
                 </a>
-                <button id="header-wallet-settings" class="w-full text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors flex items-center space-x-2" onclick="openWalletSettingsModal()">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    <span class="text-sm">Wallet Settings</span>
-                </button>
-                <div class="border-t border-gray-800 mt-2 pt-2">
-                    <button id="header-disconnect-wallet" class="w-full text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors flex items-center space-x-2 text-red-400">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                
+                <div class="my-2 border-t border-gray-800"></div>
+                
+                <button 
+                    data-wallet-element="disconnect" 
+                    class="w-full text-left px-4 py-2.5 rounded-lg hover:bg-red-500/10 transition-all flex items-center gap-3 group"
+                >
+                    <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+                        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                         </svg>
-                        <span class="text-sm">Disconnect</span>
-                    </button>
-                </div>
+                    </div>
+                    <span class="text-sm text-red-400">Disconnect Wallet</span>
+                </button>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-// Wallet button functionality
-(function() {
-    const connectBtn = document.getElementById('header-connect-wallet');
-    const connectedDiv = document.getElementById('header-wallet-connected');
-    const dropdown = document.getElementById('wallet-dropdown');
-    const addressEl = document.getElementById('header-wallet-address');
-    const balanceEl = document.getElementById('header-wallet-balance');
-    const disconnectBtn = document.getElementById('header-disconnect-wallet');
-    const copyBtn = document.getElementById('header-copy-address');
-    const explorerBtn = document.getElementById('header-view-explorer');
-    const mobileConnectBtn = document.getElementById('mobile-connect-wallet');
-    
-    let currentWallet = null;
-    
-    // Check if wallet adapter is loaded
-    function waitForWalletAdapter() {
-        if (typeof WalletAdapter !== 'undefined') {
-            initializeWalletButton();
-        } else {
-            setTimeout(waitForWalletAdapter, 100);
-        }
-    }
-    
-    function initializeWalletButton() {
-        const adapter = window.walletAdapter || new WalletAdapter();
-        
-        // Try to restore connection
-        adapter.restoreConnection().then(address => {
-            if (address) {
-                currentWallet = address;
-                updateConnectedState(address, adapter.walletType);
-                updateBalance();
-            }
-        });
-        
-        // Listen for connection events
-        adapter.on('connect', ({ publicKey, walletType }) => {
-            currentWallet = publicKey;
-            updateConnectedState(publicKey, walletType);
-            updateBalance();
-        });
-        
-        adapter.on('disconnect', () => {
-            currentWallet = null;
-            updateDisconnectedState();
-        });
-        
-        // Mobile connect button opens modal
-        if (mobileConnectBtn) {
-            mobileConnectBtn.onclick = openWalletConnectModal;
-        }
-        
-        // Disconnect button
-        if (disconnectBtn) {
-            disconnectBtn.addEventListener('click', async () => {
-                await adapter.disconnect();
-                dropdown.classList.add('hidden');
-            });
-        }
-        
-        // Copy address
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                if (currentWallet) {
-                    navigator.clipboard.writeText(currentWallet);
-                    copyBtn.querySelector('span').textContent = 'Copied!';
-                    setTimeout(() => {
-                        copyBtn.querySelector('span').textContent = 'Copy Address';
-                    }, 2000);
-                }
-            });
-        }
-        
-        // View on explorer
-        if (explorerBtn) {
-            explorerBtn.addEventListener('click', () => {
-                if (currentWallet) {
-                    window.open(`https://solscan.io/account/${currentWallet}`, '_blank');
-                }
-            });
-        }
-        
-        // Toggle dropdown
-        connectedDiv?.addEventListener('click', (e) => {
-            if (!e.target.closest('#wallet-dropdown')) {
-                dropdown.classList.toggle('hidden');
-            }
-        });
-        
-        // Close dropdown on outside click
-        document.addEventListener('click', (e) => {
-            if (!connectedDiv?.contains(e.target)) {
-                dropdown.classList.add('hidden');
-            }
-        });
-        
-        // Listen for storage events to sync across tabs
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'connectedWallet') {
-                if (e.newValue) {
-                    updateConnectedState(e.newValue);
-                    updateBalance();
-                } else {
-                    updateDisconnectedState();
-                }
-            }
-        });
-    }
-    
-    function updateConnectedState(address, walletType = 'browser') {
-        if (connectBtn) connectBtn.style.display = 'none';
-        if (connectedDiv) connectedDiv.style.display = 'block';
-        if (addressEl) addressEl.textContent = address.slice(0, 4) + '...' + address.slice(-4);
-        
-        // Update wallet type indicator
-        const typeText = document.getElementById('wallet-connection-type');
-        const typeBadge = document.getElementById('wallet-type-badge');
-        
-        if (walletType === 'hot') {
-            if (typeText) typeText.textContent = 'Hot Wallet';
-            if (typeBadge) {
-                typeBadge.style.display = 'inline-block';
-                typeBadge.textContent = 'HOT';
-            }
-        } else {
-            if (typeText) typeText.textContent = 'Connected';
-            if (typeBadge) typeBadge.style.display = 'none';
-        }
-        
-        if (mobileConnectBtn) {
-            mobileConnectBtn.textContent = address.slice(0, 4) + '...' + address.slice(-4);
-            mobileConnectBtn.classList.remove('btn-primary');
-            mobileConnectBtn.classList.add('btn-secondary');
-            mobileConnectBtn.disabled = true;
-        }
-        currentWallet = address;
-    }
-    
-    function updateDisconnectedState() {
-        if (connectBtn) connectBtn.style.display = 'flex';
-        if (connectedDiv) connectedDiv.style.display = 'none';
-        if (mobileConnectBtn) {
-            mobileConnectBtn.textContent = 'Connect Wallet';
-            mobileConnectBtn.classList.add('btn-primary');
-            mobileConnectBtn.classList.remove('btn-secondary');
-            mobileConnectBtn.disabled = false;
-        }
-        currentWallet = null;
-        
-        // Clear all wallet-related localStorage
-        localStorage.removeItem('connectedWallet');
-        localStorage.removeItem('walletType');
-        localStorage.removeItem('walletAddress');
-        localStorage.removeItem('hotWalletData');
-    }
-    
-    async function updateBalance() {
-        if (!currentWallet) return;
-        
-        try {
-            // Use backend proxy to avoid CORS issues
-            const response = await fetch(`api/get-balance.php?wallet=${encodeURIComponent(currentWallet)}`);
-            const data = await response.json();
-            
-            if (data.success && balanceEl) {
-                balanceEl.textContent = data.balanceFormatted;
-            } else {
-                // Fallback display
-                if (balanceEl) {
-                    balanceEl.textContent = '~ SOL';
-                }
-                console.log('Balance fetch failed:', data.error || 'Unknown error');
-            }
-        } catch (err) {
-            console.log('Balance fetching failed:', err.message);
-            // Set a fallback display
-            if (balanceEl) {
-                balanceEl.textContent = '~ SOL';
-            }
-        }
-    }
-    
-    // Start initialization
-    waitForWalletAdapter();
-})();
-</script>

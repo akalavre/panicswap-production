@@ -217,6 +217,18 @@
             transform: translateY(0);
         }
     </style>
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Wallet Scripts -->
+    <script src="assets/js/supabase-config.js"></script>
+    <script src="assets/js/wallet-state.js"></script>
+    <script src="assets/js/global-wallet-restore.js"></script>
+    <script src="assets/js/components/wallet-status-component.js"></script>
+    <script src="assets/js/wallet-adapter.js"></script>
+    <script src="assets/js/wallet-button-ui.js"></script>
+    <script src="assets/js/main.js"></script>
 </head>
 <body class="bg-black text-gray-100 font-sans antialiased">
     <?php include 'components/network-status.php'; ?>
@@ -304,7 +316,7 @@
                                 <svg class="w-4 h-4 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                Up to 100 tokens
+                                Up to 20 tokens
                             </div>
                         </div>
                     </div>
@@ -361,6 +373,165 @@
                                 Custom triggers
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Protection Modes Section -->
+        <section id="protection-modes" class="py-20 px-4 bg-black/50 fade-in-section">
+            <div class="container mx-auto max-w-6xl">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                        Choose Your <span class="stat-number">Protection Level</span>
+                    </h2>
+                    <p class="text-xl text-gray-400 max-w-3xl mx-auto">
+                        PanicSwap offers two distinct protection modes to suit different security preferences and risk tolerances.
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+                    <!-- Full Protection Mode -->
+                    <div class="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-8 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-amber-500/20 text-amber-300 px-3 py-1 rounded-bl-lg text-sm font-semibold">
+                            Premium
+                        </div>
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-white">🛡️ Full Protection Mode</h3>
+                                <p class="text-amber-300">Maximum security with automatic emergency swaps</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4 mb-6">
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Instant Emergency Swaps</span>
+                                    <p class="text-gray-300 text-sm">Automatic sell execution when threats are detected</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Real-time Monitoring</span>
+                                    <p class="text-gray-300 text-sm">Continuous threat detection and analysis</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Instant Alerts</span>
+                                    <p class="text-gray-300 text-sm">Immediate notifications via dashboard and Telegram</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-amber-200 font-semibold">Requires Wallet Connection</span>
+                                    <p class="text-gray-300 text-sm">For transaction signing and automatic execution</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                            <p class="text-amber-200 text-sm">
+                                <strong>Best for:</strong> Active traders who want maximum protection and don't mind connecting their wallet for automatic execution.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Watch-Only Mode -->
+                    <div class="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-8 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-green-500/20 text-green-300 px-3 py-1 rounded-bl-lg text-sm font-semibold">
+                            Free Tier
+                        </div>
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-white">👁️ Watch-Only Mode</h3>
+                                <p class="text-blue-300">Monitoring and alerts without wallet connection</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4 mb-6">
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Real-time Monitoring</span>
+                                    <p class="text-gray-300 text-sm">Track any wallet address for potential threats</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Instant Alerts</span>
+                                    <p class="text-gray-300 text-sm">Get notified immediately when threats are detected</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-white font-semibold">Manual Address Entry</span>
+                                    <p class="text-gray-300 text-sm">Simply enter any Solana wallet address to monitor</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                <div>
+                                    <span class="text-blue-300 font-semibold">No Private Keys Required</span>
+                                    <p class="text-gray-300 text-sm">Complete security with zero wallet connection</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                            <p class="text-blue-200 text-sm">
+                                <strong>Best for:</strong> Security-conscious users who prefer manual control and don't want to connect their wallet, or users monitoring multiple addresses.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Comparison Note -->
+                <div class="bg-gray-900/50 border border-gray-700 rounded-xl p-8 text-center">
+                    <h4 class="text-2xl font-semibold text-white mb-4">🔄 Switch Anytime</h4>
+                    <p class="text-gray-300 text-lg max-w-2xl mx-auto">
+                        You can easily switch between protection modes at any time. Start with Watch-Only Mode to explore safely, then upgrade to Full Protection when you're ready for automatic execution.
+                    </p>
+                    <div class="mt-6">
+                        <a href="dashboard.php" class="btn btn-primary inline-flex items-center">
+                            Try Both Modes
+                            <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                            </svg>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -762,6 +933,9 @@
     </main>
     
     <?php include 'components/footer.php'; ?>
+    
+    <!-- Wallet Connect Modal -->
+    <?php include 'components/wallet-connect-modal.php'; ?>
     
     <script>
         // FAQ Toggle

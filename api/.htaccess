@@ -18,3 +18,10 @@ RewriteRule ^protection/status/([^/]+)/([^/]+)$ protection/status.php?wallet=$1&
 
 # Handle auto-protection bulk toggle endpoint
 RewriteRule ^auto-protection/bulk-toggle/([^/]+)$ auto-protection/bulk-toggle.php?wallet=$1 [L]
+
+# Handle update-monitoring-settings endpoint
+RewriteRule ^update-monitoring-settings$ update-monitoring-settings.php [L]
+
+# Handle v2 API endpoints
+RewriteRule ^v2/tokens/batch$ v2/tokens.php/batch [L]
+RewriteRule ^v2/tokens/(.+)$ v2/tokens.php/$1 [L]

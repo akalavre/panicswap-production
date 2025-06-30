@@ -390,21 +390,42 @@ export class HeliusAutomaticTokenDiscoveryService {
    */
   private async saveTokenData(tokenData: any): Promise<void> {
     try {
+      // First, fetch current row to preserve existing non-placeholder values
+      const { data: existing } = await supabase.from('token_metadata').select('*').eq('mint', tokenData.mint).single();
+      
+      // Build upsert data preserving existing good values
+      const upsertData: any = {
+        mint: tokenData.mint,
+        symbol: this.preserveExistingValue(tokenData.symbol, existing?.symbol, 'UNKNOWN'),
+        name: this.preserveExistingValue(tokenData.name, existing?.name, 'Unknown Token'),
+        decimals: tokenData.decimals || existing?.decimals || 6,
+        platform: existing?.platform || tokenData.platform,
+        is_active: existing?.is_active ?? false,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only set created_at if this is a new record
+      if (!existing) {
+        upsertData.created_at = tokenData.discoveredAt.toISOString();
+      }
+      
+      // Preserve other fields if they exist and are not placeholders
+      if (tokenData.logo_uri) {
+        upsertData.logo_uri = tokenData.logo_uri;
+      } else if (existing?.logo_uri && !this.isPlaceholderValue(existing.logo_uri)) {
+        upsertData.logo_uri = existing.logo_uri;
+      }
+      
+      if (tokenData.description) {
+        upsertData.description = tokenData.description;
+      } else if (existing?.description && !this.isPlaceholderValue(existing.description)) {
+        upsertData.description = existing.description;
+      }
+      
       // Save to token_metadata
       const { error: metadataError } = await supabase
         .from('token_metadata')
-        .upsert({
-          mint: tokenData.mint,
-          symbol: tokenData.symbol,
-          name: tokenData.name,
-          decimals: tokenData.decimals,
-          platform: tokenData.platform,
-          logo_uri: tokenData.logo_uri,
-          description: tokenData.description,
-          is_active: false,
-          created_at: tokenData.discoveredAt.toISOString(),
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'mint' });
+        .upsert(upsertData, { onConflict: 'mint' });
 
       if (metadataError) {
         console.error('Error saving token metadata:', metadataError);
@@ -477,6 +498,43 @@ export class HeliusAutomaticTokenDiscoveryService {
     } catch (error) {
       console.error('Error saving bonding curve:', error);
     }
+  }
+
+  /**
+   * Helper method to preserve existing non-placeholder values
+   * If the new value is empty/null but existing has a non-placeholder value, reuse existing
+   * Otherwise use the new value or fallback
+   */
+  private preserveExistingValue(newValue: any, existingValue: any, ...placeholders: string[]): any {
+    // If new value is valid (not null/undefined/empty), use it
+    if (newValue !== null && newValue !== undefined && newValue !== '') {
+      return newValue;
+    }
+    
+    // If existing value exists and is not a placeholder, preserve it
+    if (existingValue && !this.isPlaceholderValue(existingValue, ...placeholders)) {
+      return existingValue;
+    }
+    
+    // Otherwise use the first placeholder as fallback
+    return placeholders[0] || null;
+  }
+
+  /**
+   * Helper method to check if a value is a placeholder
+   */
+  private isPlaceholderValue(value: any, ...placeholders: string[]): boolean {
+    if (!value) return true;
+    
+    const stringValue = String(value).toLowerCase();
+    return placeholders.some(placeholder => 
+      stringValue === placeholder.toLowerCase() ||
+      stringValue.includes('unknown') ||
+      stringValue.includes('test') ||
+      stringValue.includes('demo') ||
+      stringValue === 'null' ||
+      stringValue === 'undefined'
+    );
   }
 
   /**

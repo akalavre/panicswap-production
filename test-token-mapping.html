@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test TokenDataManager _mapApiToken</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #fff; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .pass { background: #1a4a1a; border: 1px solid #4a8a4a; }
+        .fail { background: #4a1a1a; border: 1px solid #8a4a4a; }
+        pre { background: #2a2a2a; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .section { margin: 20px 0; border: 1px solid #444; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>TokenDataManager Field Mapping Test</h1>
+    
+    <div class="section">
+        <h2>Test 1: Field Renaming (API → Frontend)</h2>
+        <div id="test1-result"></div>
+        <pre id="test1-details"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Test 2: Derived Value Calculations</h2>
+        <div id="test2-result"></div>
+        <pre id="test2-details"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Test 3: Nested Object Flattening</h2>
+        <div id="test3-result"></div>
+        <pre id="test3-details"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Test 4: Age Calculation</h2>
+        <div id="test4-result"></div>
+        <pre id="test4-details"></pre>
+    </div>
+
+    <script src="assets/js/services/TokenDataManager.js"></script>
+    
+    <script>
+        // Test data simulating various API response formats
+        const testTokenApiResponse = {
+            mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // tokenMint → token_mint
+            tokenMint: "should_be_overridden",
+            walletAddress: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+            symbol: "USDC",
+            name: "USD Coin",
+            logoUrl: "https://example.com/usdc.png", // logoUrl → image/logo_uri/logo_url
+            price_usd: 0.999876, // price_usd → price
+            priceChange24h: -0.0124, // priceChange24h → price_change_24h
+            balance: 1000000000, // raw balance
+            userBalance: 1000000000, // should be same as balance
+            decimals: 6,
+            liquidity: 1234567.89, // liquidity → liquidity_usd
+            volume24h: 987654.32, // volume24h → volume_24h
+            marketCap: 32000000000, // marketCap → market_cap
+            holders: 15420, // holders → holder_count
+            createdAt: "2021-06-07T00:00:00Z", // for age calculation
+            monitoring: {
+                active: true
+            }, // monitoring.active → monitoring_active
+            protection: {
+                isActive: false
+            }, // protection.isActive → protected
+            risk: {
+                score: 2.3,
+                level: "LOW"
+            }, // risk.score → risk_score, risk.level → risk_level
+            developerActivity: {
+                percentage: 5.2,
+                creatorBalance: 8.1
+            }, // developerActivity → dev_activity_pct, creator_balance_pct
+            badgeState: "WATCHING", // badgeState → badge_state
+            isTestToken: false // isTestToken → is_test_token
+        };
+        
+        function runTests() {
+            console.log('Testing TokenDataManager._mapApiToken()...');
+            
+            // Get the manager instance
+            const manager = window.TokenDataManager;
+            if (!manager) {
+                console.error('TokenDataManager not available');
+                return;
+            }
+            
+            // Map the test data
+            const mapped = manager._mapApiToken(testTokenApiResponse);
+            console.log('Mapped result:', mapped);
+            
+            // Test 1: Field Renaming
+            test1(mapped);
+            
+            // Test 2: Derived Value Calculations
+            test2(mapped);
+            
+            // Test 3: Nested Object Flattening
+            test3(mapped);
+            
+            // Test 4: Age Calculation
+            test4(mapped);
+        }
+        
+        function test1(mapped) {
+            const tests = [
+                { field: 'token_mint', expected: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', desc: 'mint → token_mint' },
+                { field: 'wallet_address', expected: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', desc: 'walletAddress → wallet_address' },
+                { field: 'price', expected: 0.999876, desc: 'price_usd → price' },
+                { field: 'price_change_24h', expected: -0.0124, desc: 'priceChange24h → price_change_24h' },
+                { field: 'image', expected: 'https://example.com/usdc.png', desc: 'logoUrl → image' },
+                { field: 'liquidity_usd', expected: 1234567.89, desc: 'liquidity → liquidity_usd' },
+                { field: 'volume_24h', expected: 987654.32, desc: 'volume24h → volume_24h' },
+                { field: 'market_cap', expected: 32000000000, desc: 'marketCap → market_cap' },
+                { field: 'holder_count', expected: 15420, desc: 'holders → holder_count' }
+            ];
+            
+            let passed = 0;
+            let failed = 0;
+            let details = '';
+            
+            for (const test of tests) {
+                if (mapped[test.field] === test.expected) {
+                    passed++;
+                    details += `✅ ${test.desc}: ${mapped[test.field]}\n`;
+                } else {
+                    failed++;
+                    details += `❌ ${test.desc}: Expected ${test.expected}, got ${mapped[test.field]}\n`;
+                }
+            }
+            
+            const resultDiv = document.getElementById('test1-result');
+            const detailsDiv = document.getElementById('test1-details');
+            
+            if (failed === 0) {
+                resultDiv.className = 'test-result pass';
+                resultDiv.textContent = `✅ PASS: ${passed}/${passed} field mappings correct`;
+            } else {
+                resultDiv.className = 'test-result fail';
+                resultDiv.textContent = `❌ FAIL: ${passed}/${passed + failed} field mappings correct`;
+            }
+            
+            detailsDiv.textContent = details;
+        }
+        
+        function test2(mapped) {
+            // Calculate expected values
+            const expectedBalanceUI = 1000000000 / Math.pow(10, 6); // 1000 USDC
+            const expectedValue = expectedBalanceUI * 0.999876; // ~999.876
+            
+            const tests = [
+                { field: 'balance_ui', expected: expectedBalanceUI, desc: 'balance_ui calculation (balance / 10^decimals)' },
+                { field: 'value', expected: expectedValue, desc: 'value calculation (balance_ui * price)' },
+                { field: 'userValue', expected: expectedValue, desc: 'userValue calculation (same as value)' },
+                { field: 'decimals', expected: 6, desc: 'decimals preserved' }
+            ];
+            
+            let passed = 0;
+            let failed = 0;
+            let details = '';
+            
+            for (const test of tests) {
+                const actual = mapped[test.field];
+                const tolerance = 0.001; // Allow small floating point differences
+                
+                if (Math.abs(actual - test.expected) < tolerance) {
+                    passed++;
+                    details += `✅ ${test.desc}: ${actual}\n`;
+                } else {
+                    failed++;
+                    details += `❌ ${test.desc}: Expected ${test.expected}, got ${actual}\n`;
+                }
+            }
+            
+            const resultDiv = document.getElementById('test2-result');
+            const detailsDiv = document.getElementById('test2-details');
+            
+            if (failed === 0) {
+                resultDiv.className = 'test-result pass';
+                resultDiv.textContent = `✅ PASS: ${passed}/${passed} derived values correct`;
+            } else {
+                resultDiv.className = 'test-result fail';
+                resultDiv.textContent = `❌ FAIL: ${passed}/${passed + failed} derived values correct`;
+            }
+            
+            detailsDiv.textContent = details;
+        }
+        
+        function test3(mapped) {
+            const tests = [
+                { field: 'monitoring_active', expected: true, desc: 'monitoring.active → monitoring_active' },
+                { field: 'protected', expected: false, desc: 'protection.isActive → protected' },
+                { field: 'risk_score', expected: 2.3, desc: 'risk.score → risk_score' },
+                { field: 'risk_level', expected: 'LOW', desc: 'risk.level → risk_level' },
+                { field: 'dev_activity_pct', expected: 5.2, desc: 'developerActivity.percentage → dev_activity_pct' },
+                { field: 'creator_balance_pct', expected: 8.1, desc: 'developerActivity.creatorBalance → creator_balance_pct' }
+            ];
+            
+            let passed = 0;
+            let failed = 0;
+            let details = '';
+            
+            for (const test of tests) {
+                if (mapped[test.field] === test.expected) {
+                    passed++;
+                    details += `✅ ${test.desc}: ${mapped[test.field]}\n`;
+                } else {
+                    failed++;
+                    details += `❌ ${test.desc}: Expected ${test.expected}, got ${mapped[test.field]}\n`;
+                }
+            }
+            
+            const resultDiv = document.getElementById('test3-result');
+            const detailsDiv = document.getElementById('test3-details');
+            
+            if (failed === 0) {
+                resultDiv.className = 'test-result pass';
+                resultDiv.textContent = `✅ PASS: ${passed}/${passed} nested fields flattened correctly`;
+            } else {
+                resultDiv.className = 'test-result fail';
+                resultDiv.textContent = `❌ FAIL: ${passed}/${passed + failed} nested fields flattened correctly`;
+            }
+            
+            detailsDiv.textContent = details;
+        }
+        
+        function test4(mapped) {
+            // Test age calculation
+            const createdDate = new Date("2021-06-07T00:00:00Z");
+            const now = new Date();
+            const diffDays = (now - createdDate) / (1000 * 60 * 60 * 24);
+            
+            let passed = 0;
+            let failed = 0;
+            let details = '';
+            
+            if (mapped.age && typeof mapped.age === 'object') {
+                passed++;
+                details += `✅ Age object created: ${JSON.stringify(mapped.age)}\n`;
+                
+                if (mapped.age.raw_days && mapped.age.raw_days > 1000) {
+                    passed++;
+                    details += `✅ raw_days calculated: ${mapped.age.raw_days.toFixed(1)} days\n`;
+                } else {
+                    failed++;
+                    details += `❌ raw_days incorrect: ${mapped.age.raw_days}\n`;
+                }
+                
+                if (mapped.age.unit === 'mo' || mapped.age.unit === 'd') {
+                    passed++;
+                    details += `✅ Age unit appropriate for old token: ${mapped.age.value}${mapped.age.unit}\n`;
+                } else {
+                    failed++;
+                    details += `❌ Age unit incorrect for old token: ${mapped.age.unit}\n`;
+                }
+            } else {
+                failed++;
+                details += `❌ Age object not created or invalid\n`;
+            }
+            
+            if (mapped.created_at === "2021-06-07T00:00:00Z") {
+                passed++;
+                details += `✅ created_at preserved: ${mapped.created_at}\n`;
+            } else {
+                failed++;
+                details += `❌ created_at incorrect: ${mapped.created_at}\n`;
+            }
+            
+            const resultDiv = document.getElementById('test4-result');
+            const detailsDiv = document.getElementById('test4-details');
+            
+            if (failed === 0) {
+                resultDiv.className = 'test-result pass';
+                resultDiv.textContent = `✅ PASS: ${passed}/${passed} age calculations correct`;
+            } else {
+                resultDiv.className = 'test-result fail';
+                resultDiv.textContent = `❌ FAIL: ${passed}/${passed + failed} age calculations correct`;
+            }
+            
+            detailsDiv.textContent = details;
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

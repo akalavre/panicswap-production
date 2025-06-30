@@ -1,0 +1,58 @@
+{
+  "tokens": [
+    {
+      "tokenMint": "TOKEN_MINT_1",
+      "walletAddress": "DEMO_WALLET",
+      "symbol": "UNKNOWN",
+      "name": "Unknown Token",
+      "logoUrl": null,
+      "balance": 0,
+      "decimals": 9,
+      "userBalance": 0,
+      "price": 0,
+      "userValue": 0,
+      "liquidity": 0,
+      "monitoring": {
+        "active": false,
+        "alerts": {
+          "flashRug": false,
+          "rapidDrain": false
+        }
+      },
+      "protection": {
+        "isActive": false
+      },
+      "risk": {
+        "score": 0,
+        "level": "UNKNOWN"
+      }
+    },
+    {
+      "tokenMint": "TOKEN_MINT_2",
+      "walletAddress": "DEMO_WALLET",
+      "symbol": "UNKNOWN",
+      "name": "Unknown Token",
+      "logoUrl": null,
+      "balance": 0,
+      "decimals": 9,
+      "userBalance": 0,
+      "price": 0,
+      "userValue": 0,
+      "liquidity": 0,
+      "monitoring": {
+        "active": false,
+        "alerts": {
+          "flashRug": false,
+          "rapidDrain": false
+        }
+      },
+      "protection": {
+        "isActive": false
+      },
+      "risk": {
+        "score": 0,
+        "level": "UNKNOWN"
+      }
+    }
+  ]
+}

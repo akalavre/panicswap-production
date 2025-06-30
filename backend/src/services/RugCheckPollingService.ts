@@ -103,12 +103,7 @@ export class RugCheckPollingService {
             hasChanges = true;
           }
           
-          // Get creator balance percentage
-          const creatorBalance = await this.getCreatorBalancePercent(tokenToUpdate.mint);
-          if (Math.abs(creatorBalance - (currentData.creator_balance_percent || 0)) > 0.1) {
-            updates.creator_balance_percent = creatorBalance;
-            hasChanges = true;
-          }
+          // Creator balance is now tracked by LiquidityVelocityTracker for better performance
           
           // Get LP locked percentage
           const lpLocked = await this.getLPLockedPercent(tokenToUpdate.mint);
@@ -133,7 +128,7 @@ export class RugCheckPollingService {
                 mint_authority: currentData.mint_authority,
                 freeze_authority: currentData.freeze_authority,
                 lp_locked: updates.lp_locked || currentData.lp_locked,
-                creator_balance_percent: updates.creator_balance_percent || currentData.creator_balance_percent
+                creator_balance_percent: currentData.creator_balance_percent || 0  // Use existing value
               }
             );
             
@@ -179,8 +174,8 @@ export class RugCheckPollingService {
             console.log(`Got real holder count for ${tokenToUpdate.symbol}: ${realData.holders}`);
           }
           
-          // Get creator balance percentage
-          realData.creatorBalance = await this.getCreatorBalancePercent(tokenToUpdate.mint);
+          // Creator balance is now tracked by LiquidityVelocityTracker
+          realData.creatorBalance = 0;  // Will be updated by velocity tracker
           
           // Get LP locked percentage
           realData.lpLocked = await this.getLPLockedPercent(tokenToUpdate.mint);
@@ -288,7 +283,7 @@ export class RugCheckPollingService {
         if (!existing) {
           // Fetch real data for immediate update
           const holderCount = await this.getRealHolderCount(mint);
-          const creatorBalance = await this.getCreatorBalancePercent(mint);
+          const creatorBalance = 0;  // Now tracked by LiquidityVelocityTracker
           const lpLocked = await this.getLPLockedPercent(mint);
           const bundlerCount = await this.getBundlerCount(mint);
           
@@ -350,51 +345,13 @@ export class RugCheckPollingService {
     }
   }
 
-  // Get creator balance percentage
+  // DEPRECATED: Creator balance percentage is now tracked by LiquidityVelocityTracker
+  // This provides better performance (updates every 30s for all tokens instead of one token per 30s)
+  /*
   private async getCreatorBalancePercent(mint: string): Promise<number> {
-    try {
-      // Get token metadata to find creator
-      const asset = await helius.rpc.getAsset({ id: mint });
-      if (!asset || !asset.creators || asset.creators.length === 0) {
-        return 0;
-      }
-      
-      const creator = asset.creators[0].address; // First creator is usually the deployer
-      console.log(`Checking creator balance for ${mint}, creator: ${creator}`);
-      
-      // Get creator's token balance
-      const response = await rpcCall<any>(
-        "getTokenAccountsByOwner",
-        [
-          creator,
-          { mint: mint },
-          { encoding: "jsonParsed" }
-        ]
-      );
-      
-      if (response?.value && response.value.length > 0) {
-        const tokenAccount = response.value[0];
-        const balance = tokenAccount.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
-        
-        // Get total supply
-        const supplyResponse = await rpcCall<any>(
-          "getTokenSupply",
-          [mint]
-        );
-        
-        const totalSupply = supplyResponse?.value?.uiAmount || 1;
-        const creatorPercent = (balance / totalSupply) * 100;
-        
-        console.log(`Creator holds ${balance} of ${totalSupply} (${creatorPercent.toFixed(2)}%)`);
-        return creatorPercent;
-      }
-      
-      return 0;
-    } catch (error) {
-      console.error('Error getting creator balance:', error);
-      return 0;
-    }
+    // Moved to LiquidityVelocityTracker.getCreatorBalancePercent()
   }
+  */
   
   // Get bundler count by analyzing recent transactions
   private async getBundlerCount(mint: string): Promise<number> {

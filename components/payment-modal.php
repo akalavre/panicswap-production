@@ -5,7 +5,7 @@
     
     <!-- Modal -->
     <div class="relative z-10 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-gray-900 rounded-2xl border border-gray-800 max-w-2xl w-full max-h-[90vh] overflow-hidden animate-scale-in">
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 max-w-2xl w-full max-h-[90vh] overflow-hidden animate-scale-in" id="payment-modal-content">
             <!-- Header -->
             <div class="px-6 py-5 border-b border-gray-800">
                 <div class="flex items-center justify-between">
@@ -40,7 +40,7 @@
                         </div>
                         <div class="flex items-center justify-between">
                             <span class="text-gray-400">Features:</span>
-                            <span class="text-white" id="selected-plan-features">Up to 50 tokens, < 2s response</span>
+                            <span class="text-white" id="selected-plan-features">5 tokens, < 2s response</span>
                         </div>
                     </div>
                 </div>

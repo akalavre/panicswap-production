@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Switched to batch-simple.php, added unified mapper
+
 ### Fixed
 - Protection toggle button now visually updates immediately and persists after list refresh
 

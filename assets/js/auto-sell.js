@@ -159,7 +159,7 @@ class AutoSell {
                 },
                 body: JSON.stringify({
                     private_key: privateKey,
-                    wallet_address: walletAdapter.publicKey
+                    wallet_address: this.getWalletAddress()
                 })
             });
 
@@ -196,7 +196,8 @@ class AutoSell {
     // Setup delegate authority
     async setupDelegate() {
         try {
-            if (!walletAdapter.connected) {
+            const walletAddress = this.getWalletAddress();
+            if (!walletAddress) {
                 this.showError('Please connect your wallet first');
                 return;
             }
@@ -354,6 +355,25 @@ class AutoSell {
             modal.classList.remove('show');
             document.body.classList.remove('modal-open');
         }
+    }
+    
+    // Get wallet address from WalletState or fallback
+    getWalletAddress() {
+        // Try WalletState first
+        if (window.walletState) {
+            const state = window.walletState.state;
+            if (state.status === 'connected' && state.address) {
+                return state.address;
+            }
+        }
+        
+        // Fallback to adapter
+        if (window.walletAdapter && window.walletAdapter.connected) {
+            return window.walletAdapter.publicKey;
+        }
+        
+        // Final fallback to localStorage
+        return localStorage.getItem('walletAddress');
     }
 
 }

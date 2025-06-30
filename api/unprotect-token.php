@@ -104,6 +104,15 @@ try {
         
         // Log final status
         error_log("Update complete - Updated: $updatedCount of " . count($existing) . " rows");
+        
+        // Invalidate cache and force realtime sync if any rows were updated
+        if ($updatedCount > 0) {
+            $supabase->invalidateCache('protected_tokens', [
+                'token_mint' => $token_mint,
+                'wallet_address' => $wallet_address
+            ]);
+            $supabase->forceProtectionSync($token_mint, $wallet_address, false);
+        }
             
         echo json_encode([
             'success' => $updatedCount > 0,

@@ -21,6 +21,54 @@ $maxProtected = 5; // Default for Basic plan
     <title>Dashboard - PanicSwap</title>
     <meta name="description" content="Monitor and manage your protected tokens">
     
+    <!-- Critical: Create walletState placeholder FIRST before any other scripts -->
+    <script>
+        // Create placeholder immediately to prevent errors
+        if (!window.walletState) {
+            console.log('Creating temporary walletState placeholder (early)');
+            window.walletState = {
+                _state: { status: 'idle', address: null, mode: null },
+                _listeners: new Map(),
+                
+                get state() {
+                    return this._state;
+                },
+                
+                getState: function() {
+                    return this._state;
+                },
+                
+                on: function(event, callback) {
+                    if (!this._listeners.has(event)) {
+                        this._listeners.set(event, []);
+                    }
+                    this._listeners.get(event).push(callback);
+                },
+                
+                off: function(event, callback) {
+                    if (!this._listeners.has(event)) return;
+                    const callbacks = this._listeners.get(event);
+                    const index = callbacks.indexOf(callback);
+                    if (index > -1) {
+                        callbacks.splice(index, 1);
+                    }
+                },
+                
+                // Add other methods that might be called
+                connectWatch: async function() { return null; },
+                connectBrowser: async function() { return null; },
+                upgradeFull: async function() { return null; },
+                disconnect: async function() { return null; },
+                restoreConnection: async function() { return null; },
+                switchToFull: async function() { return null; },
+                switchToWatch: async function() { return null; }
+            };
+            
+            // Mark as placeholder
+            window.walletState._isPlaceholder = true;
+        }
+    </script>
+    
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -252,6 +300,84 @@ $maxProtected = 5; // Default for Basic plan
     <script src="assets/js/token-price-helper.js"></script>
     <script src="assets/js/supabase-token-fetcher.js"></script>
     
+    <!-- Core Wallet State Management -->
+    <script>
+        // Create placeholder BEFORE loading wallet-state.js to ensure it's always available
+        if (!window.walletState) {
+            console.log('Creating temporary walletState placeholder');
+            // Create a more complete placeholder that won't cause errors
+            window.walletState = {
+                _state: { status: 'idle', address: null, mode: null },
+                _listeners: new Map(),
+                
+                get state() {
+                    return this._state;
+                },
+                
+                getState: function() {
+                    return this._state;
+                },
+                
+                on: function(event, callback) {
+                    if (!this._listeners.has(event)) {
+                        this._listeners.set(event, []);
+                    }
+                    this._listeners.get(event).push(callback);
+                },
+                
+                off: function(event, callback) {
+                    if (!this._listeners.has(event)) return;
+                    const callbacks = this._listeners.get(event);
+                    const index = callbacks.indexOf(callback);
+                    if (index > -1) {
+                        callbacks.splice(index, 1);
+                    }
+                },
+                
+                // Add other methods that might be called
+                connectWatch: async function() { return null; },
+                connectBrowser: async function() { return null; },
+                upgradeFull: async function() { return null; },
+                disconnect: async function() { return null; },
+                restoreConnection: async function() { return null; },
+                switchToFull: async function() { return null; },
+                switchToWatch: async function() { return null; }
+            };
+            
+            // Mark as placeholder
+            window.walletState._isPlaceholder = true;
+        }
+    </script>
+    <script src="assets/js/wallet-state.js"></script>
+    <script src="assets/js/global-wallet-restore.js"></script>
+    <script src="assets/js/wallet-button-ui.js"></script>
+    
+    <!-- Risk Store - DEPRECATED: Now using UnifiedBadgeService instead -->
+    <!-- <script src="assets/js/risk-store.js"></script> -->
+    
+    <!-- Unified Badge Service - Single source of truth for all badge states -->
+    <script src="assets/js/unified-badge-service.js"></script>
+    
+    <!-- Atomic Badge Renderer - Bridges to UnifiedBadgeService (load after unified service) -->
+    <script src="assets/js/atomic-badge-renderer.js"></script>
+    
+    <!-- WebSocket Fallback - Provides REST API fallback when WebSocket fails (load early) -->
+    <script src="assets/js/websocket-fallback.js"></script>
+    
+    <!-- Monitoring Data Fetcher - Direct API access without Redis caching -->
+    <!-- Removed: monitoring-data-fetcher.js - Now using unified-token-data-service.js -->
+    
+    <!-- Unified Token Data Service - Centralized token data fetching -->
+    <script src="assets/js/unified-token-data-service.js"></script>
+    
+    <!-- Token Data Manager - New unified service for all token data -->
+    <script src="assets/js/services/TokenDataManager.js"></script>
+    
+    <script src="assets/js/components/wallet-status-component.js"></script>
+    
+    <!-- Mode Switching Progress Indicator -->
+    <script src="assets/js/components/mode-switching-indicator.js"></script>
+    
     <!-- Dashboard Modules -->
     <script src="assets/js/dashboard/notifications.js"></script>
     <script src="assets/js/dashboard/add-test-token.js"></script>
@@ -259,11 +385,16 @@ $maxProtected = 5; // Default for Basic plan
     <script src="assets/js/dashboard/token-management.js"></script>
     <script src="assets/js/dashboard/dashboard-main.js"></script>
     
+    <!-- Unified Banner Controller (loads after wallet-state) -->
+    <script src="assets/js/banner-controller.js"></script>
+    
     <!-- Protection API and Toggle -->
     <script src="assets/js/protectionApi.js"></script>
     <script src="assets/js/protection-toggle.js"></script>
     <script src="assets/js/realtimeProtectionListener.js"></script>
     <script src="assets/js/monitoring-tooltip.js"></script>
+    <!-- Unified Token Data Service - Single source of truth -->
+    <script src="assets/js/unified-token-data-service.js"></script>
     <script src="assets/js/dashboard/monitoring-integration.js"></script>
 </head>
 <body class="bg-black text-gray-100 font-sans antialiased">
@@ -271,7 +402,103 @@ $maxProtected = 5; // Default for Basic plan
     <?php include 'components/header.php'; ?>
     
     <main class="container mx-auto px-4 py-6 mt-8 max-w-[1600px]">
-        <!-- Top Alert Banner -->
+        <!-- Dynamic Banners - Managed by BannerController -->
+        
+        <!-- Connect Wallet Banner -->
+        <div id="connect-wallet-banner" class="mb-6 p-4 rounded-xl hidden transition-opacity duration-300" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%); border: 1px solid rgba(59, 130, 246, 0.2);">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 rounded-lg bg-blue-500/20">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-semibold text-white">Connect Your Wallet</span>
+                        <p class="text-sm text-gray-400 mt-1">
+                            Connect your Solana wallet to start protecting your tokens from rug pulls and scams.
+                        </p>
+                        <button onclick="openWalletConnectModal()" class="text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors">
+                            Connect Wallet →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Full Protection Banner -->
+        <div id="full-protection-banner" class="mb-6 p-4 rounded-xl hidden transition-opacity duration-300" style="background: linear-gradient(135deg, rgba(251, 146, 60, 0.05) 0%, rgba(251, 113, 133, 0.05) 100%); border: 1px solid rgba(251, 146, 60, 0.2);">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 rounded-lg bg-orange-500/20">
+                        <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-semibold text-white">Upgrade to Full Protection</span>
+                        <p class="text-sm text-gray-400 mt-1">
+                            Enable automatic emergency swaps and instant protection without manual approvals.
+                        </p>
+                        <button onclick="openFullProtectionModal()" class="text-xs text-orange-400 hover:text-orange-300 mt-1 transition-colors">
+                            Enable Full Protection →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Protected Status Banner -->
+        <div id="protected-status-banner" class="mb-6 p-4 rounded-xl hidden transition-opacity duration-300" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%); border: 1px solid rgba(34, 197, 94, 0.2);">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <div class="p-2 rounded-lg bg-green-500/20">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <div class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                    </div>
+                    <div>
+                        <span class="font-semibold text-white">Full Protection Active</span>
+                        <p class="text-sm text-gray-400 mt-1">
+                            Your tokens are fully protected with automatic emergency swaps enabled.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span class="text-xs text-green-400 font-medium">Active</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- New Modes Banner (Optional) -->
+        <div id="new-modes-banner" class="mb-6 p-4 rounded-xl hidden transition-opacity duration-300" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%); border: 1px solid rgba(168, 85, 247, 0.2);">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 rounded-lg bg-purple-500/20">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-semibold text-white">New Trading Modes Available</span>
+                        <p class="text-sm text-gray-400 mt-1">
+                            Try our new advanced trading features and enhanced protection modes.
+                        </p>
+                    </div>
+                </div>
+                <button id="close-new-modes-banner" class="text-gray-500 hover:text-gray-300 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Static Alert Banner -->
         <div class="mb-6 p-4 rounded-xl alert-banner">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
@@ -362,7 +589,7 @@ $maxProtected = 5; // Default for Basic plan
                         <h3 class="font-semibold text-white text-sm">Basic Plan</h3>
                         <p class="text-xs text-gray-500 mt-0.5">Current subscription</p>
                     </div>
-                    <a href="subscription.php" class="text-primary-400 text-xs hover:text-primary-300 transition-colors">Upgrade →</a>
+                    <a href="/subscription" class="text-primary-400 text-xs hover:text-primary-300 transition-colors">Upgrade →</a>
                 </div>
                 <div class="space-y-2 mt-4">
                     <div class="flex items-center text-xs">
@@ -512,6 +739,9 @@ $maxProtected = 5; // Default for Basic plan
     
     <!-- Wallet Connect Modal -->
     <?php include 'components/wallet-connect-modal.php'; ?>
+    
+    <!-- Full Protection Modal -->
+    <?php include 'components/full-protection-modal.php'; ?>
     
     <!-- Step by Step Guide Modal -->
     <div id="guide-modal" class="fixed inset-0 z-50 hidden">
@@ -738,6 +968,9 @@ $maxProtected = 5; // Default for Basic plan
     <!-- Protection Settings Modal -->
     <?php include 'components/protection-settings-modal.php'; ?>
     
+    <!-- Initialize Protection Settings -->
+    <script src="assets/js/protection-settings-init.js"></script>
+    
     <!-- Solana Web3.js -->
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     
@@ -746,6 +979,7 @@ $maxProtected = 5; // Default for Basic plan
     
     <!-- Dashboard Scripts -->
     <script src="assets/js/supabase-config.js"></script>
+    <script src="assets/js/services/TokenDataManager.js"></script>
     <script src="assets/js/main.js" type="module"></script>
     <script src="assets/js/wallet-adapter.js"></script>
     <script src="assets/js/auto-sell.js"></script>
@@ -1371,7 +1605,14 @@ $maxProtected = 5; // Default for Basic plan
     <!-- Real-Time Risk Display -->
     <script src="assets/js/dashboard/real-time-risk.js"></script>
     
+    <!-- ML Risk Display Service (stub implementation with console tracing) -->
+    <script src="assets/js/dashboard/ml-risk-display.js"></script>
+    
     <!-- Token Data Fetcher - Automatically fetches data for newly added tokens -->
-    <script src="assets/js/dashboard/token-data-fetcher.js"></script>
+    <!-- Removed: token-data-fetcher.js - Now using unified-token-data-service.js -->
+    
+    
+    <!-- Delete Token Modal Helper -->
+    <script src="assets/js/showDeleteTokenModal.js"></script>
 </body>
 </html>

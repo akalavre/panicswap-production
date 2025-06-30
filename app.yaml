@@ -1,0 +1,56 @@
+name: panicswap
+region: nyc
+services:
+  - name: frontend
+    dockerfile_path: Dockerfile
+    source_dir: /
+    http_port: 80
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    routes:
+      - path: /
+    envs:
+      - key: SUPABASE_URL
+        value: "https://cfficjjdhgqwqprfhlrj.supabase.co"
+      - key: SUPABASE_ANON_KEY
+        type: SECRET
+      - key: STRIPE_PUBLISHABLE_KEY
+        type: SECRET
+      - key: APP_URL
+        value: "${APP_URL}"
+  
+  - name: backend
+    dockerfile_path: backend/Dockerfile
+    source_dir: /backend
+    http_port: 3001
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    routes:
+      - path: /api
+    envs:
+      - key: NODE_ENV
+        value: "production"
+      - key: PORT
+        value: "3001"
+      - key: SUPABASE_URL
+        value: "https://cfficjjdhgqwqprfhlrj.supabase.co"
+      - key: SUPABASE_SERVICE_KEY
+        type: SECRET
+      - key: HELIUS_API_KEY
+        type: SECRET
+      - key: HELIUS_RPC_URL
+        type: SECRET
+      - key: JWT_SECRET
+        type: SECRET
+      - key: UPSTASH_REDIS_REST_URL
+        type: SECRET
+      - key: UPSTASH_REDIS_REST_TOKEN
+        type: SECRET
+      - key: STRIPE_SECRET_KEY
+        type: SECRET
+      - key: STRIPE_WEBHOOK_SECRET
+        type: SECRET
+      - key: TELEGRAM_BOT_TOKEN
+        type: SECRET
+      - key: RAPIDAPI_KEY
+        value: "569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22"

@@ -46,19 +46,50 @@ if (!$token_mint || !$wallet_address) {
     exit;
 }
 
-// Simple rate limiting using session
+// More intelligent rate limiting using session
 session_start();
-$rate_limit_key = 'monitoring_update_' . md5($wallet_address . $token_mint);
-$current_time = time();
-$last_update = $_SESSION[$rate_limit_key] ?? 0;
 
-// Allow 1 update per 5 seconds per token
-if ($current_time - $last_update < 5) {
+// Global rate limit key for wallet
+$global_rate_key = 'monitoring_global_' . md5($wallet_address);
+$token_rate_key = 'monitoring_update_' . md5($wallet_address . $token_mint);
+$current_time = time();
+
+// Initialize rate limit tracking
+if (!isset($_SESSION[$global_rate_key])) {
+    $_SESSION[$global_rate_key] = [
+        'requests' => [],
+        'last_reset' => $current_time
+    ];
+}
+
+// Clean old requests (older than 60 seconds)
+$_SESSION[$global_rate_key]['requests'] = array_filter(
+    $_SESSION[$global_rate_key]['requests'],
+    function($timestamp) use ($current_time) {
+        return ($current_time - $timestamp) < 60;
+    }
+);
+
+// Check global rate limit (max 10 requests per minute per wallet)
+$recent_requests = count($_SESSION[$global_rate_key]['requests']);
+if ($recent_requests >= 10) {
     http_response_code(429);
     echo json_encode([
         'error' => 'Rate limit exceeded',
-        'message' => 'Please wait a few seconds before updating settings again',
-        'retry_after' => 5 - ($current_time - $last_update)
+        'message' => 'Too many requests. Please wait a moment before trying again',
+        'retry_after' => 60 - ($current_time - min($_SESSION[$global_rate_key]['requests']))
+    ]);
+    exit;
+}
+
+// Check per-token rate limit (max 1 update per 2 seconds for same token)
+$last_token_update = $_SESSION[$token_rate_key] ?? 0;
+if ($current_time - $last_token_update < 2) {
+    http_response_code(429);
+    echo json_encode([
+        'error' => 'Rate limit exceeded',
+        'message' => 'Please wait before updating this token again',
+        'retry_after' => 2 - ($current_time - $last_token_update)
     ]);
     exit;
 }
@@ -66,8 +97,11 @@ if ($current_time - $last_update < 5) {
 try {
     $supabase = new SupabaseClient(true); // Use service key
     
-    // Update rate limit timestamp
-    $_SESSION[$rate_limit_key] = $current_time;
+    // Add this request to the global tracking
+    $_SESSION[$global_rate_key]['requests'][] = $current_time;
+    
+    // Update per-token timestamp
+    $_SESSION[$token_rate_key] = $current_time;
     
     // Build update data from settings
     $updateData = [

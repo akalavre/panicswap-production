@@ -1,6 +1,5 @@
 import { injectable } from 'inversify';
 import supabase from '../utils/supabaseClient';
-import { cacheKeys, CACHE_TTL, getCached, setCached } from '../utils/upstashClient';
 import { EventEmitter } from 'events';
 import config from '../config';
 
@@ -28,7 +27,7 @@ interface MLRiskData {
 @injectable()
 export class MLRiskIntegrationService extends EventEmitter {
     private updateInterval: NodeJS.Timeout | null = null;
-    private readonly UPDATE_FREQUENCY = config.mlUpdateInterval || 45000; // 45 seconds
+    private readonly UPDATE_FREQUENCY = 45000; // 45 seconds
     private mlPredictionCache = new Map<string, MLRiskData>();
 
     constructor() {
@@ -156,15 +155,8 @@ export class MLRiskIntegrationService extends EventEmitter {
                 lastUpdated: prediction.created_at
             };
 
-            // Update local cache
+            // Update local cache only
             this.mlPredictionCache.set(prediction.token_mint, mlRiskData);
-
-            // Cache in Redis
-            await setCached(
-                cacheKeys.mlPrediction(prediction.token_mint),
-                mlRiskData,
-                CACHE_TTL.ML_PREDICTIONS
-            );
 
             // Emit update event
             this.emit('ml-update', {
@@ -196,13 +188,6 @@ export class MLRiskIntegrationService extends EventEmitter {
             return cached;
         }
 
-        // Check Redis cache
-        const redisCached = await getCached<MLRiskData>(cacheKeys.mlPrediction(tokenMint));
-        if (redisCached) {
-            this.mlPredictionCache.set(tokenMint, redisCached);
-            return redisCached;
-        }
-
         // Fetch from database
         try {
             const { data, error } = await supabase
@@ -229,11 +214,6 @@ export class MLRiskIntegrationService extends EventEmitter {
 
             // Cache for next time
             this.mlPredictionCache.set(tokenMint, mlRiskData);
-            await setCached(
-                cacheKeys.mlPrediction(tokenMint),
-                mlRiskData,
-                CACHE_TTL.ML_PREDICTIONS
-            );
 
             return mlRiskData;
         } catch (error) {

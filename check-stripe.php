@@ -112,7 +112,7 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here</pre>";
     echo "<h3>Test Stripe Integration</h3>";
     echo "<p>Everything looks good! You can now test the payment system.</p>";
     echo "<a href='index.php' style='display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-right: 10px;'>Go to Homepage</a>";
-    echo "<a href='subscription.php' style='display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 5px;'>Go to Subscription Page</a>";
+    echo "<a href='/subscription' style='display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 5px;'>Go to Subscription Page</a>";
     echo "</div>";
 }
 

@@ -228,21 +228,120 @@ export class WalletTokenService {
   }
 
   /**
-   * Get token metadata from Helius
+   * Get token metadata from Helius with fallbacks
    */
   private async getTokenMetadata(mint: string): Promise<any> {
     try {
+      // First try Helius
       const asset = await this.helius.rpc.getAsset(mint);
       
-      return {
+      let metadata = {
         symbol: asset.content?.metadata?.symbol || 'UNKNOWN',
         name: asset.content?.metadata?.name || 'Unknown Token',
         logoUri: asset.content?.links?.image || asset.content?.files?.[0]?.uri
       };
+      
+      // Add intelligent fallback for name
+      if (!metadata.name || metadata.name === 'Unknown Token') {
+        if (metadata.symbol && metadata.symbol !== 'UNKNOWN') {
+          metadata.name = metadata.symbol;
+          console.log(`[WalletTokenService] Using symbol as name: ${metadata.name}`);
+        }
+      }
+      
+      // If Helius doesn't have good metadata, try PumpFun API for pump.fun tokens
+      if ((metadata.name === 'Unknown Token' || !metadata.name || metadata.name === metadata.symbol) && mint.endsWith('pump')) {
+        console.log(`[WalletTokenService] Helius metadata missing for ${mint}, trying PumpFun API`);
+        const pumpFunMetadata = await this.fetchFromPumpFunAPI(mint);
+        if (pumpFunMetadata && pumpFunMetadata.name && pumpFunMetadata.name !== 'Unknown Token') {
+          metadata = {
+            symbol: pumpFunMetadata.symbol || metadata.symbol,
+            name: pumpFunMetadata.name,
+            logoUri: pumpFunMetadata.imageUrl || metadata.logoUri
+          };
+        }
+      }
+      
+      // If still no good metadata, try DexScreener
+      if (metadata.name === 'Unknown Token' || !metadata.name || metadata.name === metadata.symbol) {
+        console.log(`[WalletTokenService] Trying DexScreener for metadata ${mint}`);
+        const dexScreenerMetadata = await this.fetchFromDexScreenerAPI(mint);
+        if (dexScreenerMetadata && dexScreenerMetadata.name && dexScreenerMetadata.name !== 'Unknown Token') {
+          metadata = {
+            symbol: dexScreenerMetadata.symbol || metadata.symbol,
+            name: dexScreenerMetadata.name,
+            logoUri: metadata.logoUri // DexScreener doesn't provide images
+          };
+        }
+      }
+      
+      return metadata;
     } catch (error) {
       console.error(`[WalletTokenService] Error fetching metadata for ${mint}:`, error);
       return {};
     }
+  }
+
+  private async fetchFromPumpFunAPI(mint: string): Promise<any> {
+    try {
+      const axios = require('axios');
+      const response = await axios.get('https://pumpfun-scraper-api.p.rapidapi.com/search_tokens', {
+        params: { term: mint },
+        headers: {
+          'x-rapidapi-host': 'pumpfun-scraper-api.p.rapidapi.com',
+          'x-rapidapi-key': '569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22'
+        },
+        timeout: 5000
+      });
+      
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        const tokenData = response.data.data.find((t: any) => 
+          t.coinMint === mint || t.mint === mint
+        );
+        
+        if (tokenData) {
+          return {
+            symbol: tokenData.ticker || tokenData.symbol,
+            name: tokenData.name,
+            imageUrl: tokenData.imageUrl
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`[WalletTokenService] Error fetching from PumpFun:`, error);
+    }
+    return null;
+  }
+
+  private async fetchFromDexScreenerAPI(mint: string): Promise<any> {
+    try {
+      const axios = require('axios');
+      const response = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, {
+        timeout: 5000,
+        headers: { 'User-Agent': 'PanicSwap/1.0' }
+      });
+      
+      if (response.data?.pairs && response.data.pairs.length > 0) {
+        const pair = response.data.pairs[0];
+        let tokenInfo = null;
+        
+        if (pair.baseToken?.address === mint) {
+          tokenInfo = pair.baseToken;
+        } else if (pair.quoteToken?.address === mint) {
+          tokenInfo = pair.quoteToken;
+        }
+        
+        if (tokenInfo) {
+          return {
+            symbol: tokenInfo.symbol,
+            name: tokenInfo.name
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`[WalletTokenService] Error fetching from DexScreener:`, error);
+    }
+    return null;
   }
 
   /**

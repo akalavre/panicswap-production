@@ -63,6 +63,79 @@ router.post('/api/tokens/enrich-test', async (req: Request, res: Response) => {
           token_program: asset.token_info?.token_program || null,
         };
         
+        // Add intelligent fallback for name
+        if (!tokenMetadata.name || tokenMetadata.name === 'Unknown Token') {
+          if (tokenMetadata.symbol && tokenMetadata.symbol !== 'UNKNOWN') {
+            tokenMetadata.name = tokenMetadata.symbol;
+            console.log(`[TestToken] Using symbol as name: ${tokenMetadata.name}`);
+          } else if (asset.content?.metadata?.symbol) {
+            tokenMetadata.name = asset.content.metadata.symbol;
+            console.log(`[TestToken] Using metadata symbol as name: ${tokenMetadata.name}`);
+          }
+        }
+        
+        // If Helius doesn't have good metadata and it's a pump.fun token, try PumpFun API
+        if ((tokenMetadata.name === 'Unknown Token' || !tokenMetadata.name || tokenMetadata.name === tokenMetadata.symbol) && mint.endsWith('pump')) {
+          console.log(`[TestToken] Helius metadata missing for ${mint}, trying PumpFun API`);
+          try {
+            const axios = require('axios');
+            const pumpResponse = await axios.get('https://pumpfun-scraper-api.p.rapidapi.com/search_tokens', {
+              params: { term: mint },
+              headers: {
+                'x-rapidapi-host': 'pumpfun-scraper-api.p.rapidapi.com',
+                'x-rapidapi-key': '569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22'
+              },
+              timeout: 5000
+            });
+            
+            if (pumpResponse.data?.data && Array.isArray(pumpResponse.data.data)) {
+              const pumpToken = pumpResponse.data.data.find((t: any) => 
+                t.coinMint === mint || t.mint === mint
+              );
+              
+              if (pumpToken && pumpToken.name && pumpToken.name !== 'Unknown Token') {
+                console.log(`[TestToken] Found PumpFun metadata: ${pumpToken.name}`);
+                tokenMetadata.name = pumpToken.name;
+                tokenMetadata.symbol = pumpToken.ticker || tokenMetadata.symbol;
+                tokenMetadata.logoUri = pumpToken.imageUrl || tokenMetadata.logoUri;
+              }
+            }
+          } catch (pumpError) {
+            console.error('[TestToken] Error fetching from PumpFun:', pumpError);
+          }
+        }
+        
+        // If still no good metadata, try DexScreener
+        if (tokenMetadata.name === 'Unknown Token' || !tokenMetadata.name) {
+          console.log(`[TestToken] Trying DexScreener for metadata ${mint}`);
+          try {
+            const axios = require('axios');
+            const dexResponse = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, {
+              timeout: 5000,
+              headers: { 'User-Agent': 'PanicSwap/1.0' }
+            });
+            
+            if (dexResponse.data?.pairs && dexResponse.data.pairs.length > 0) {
+              const pair = dexResponse.data.pairs[0];
+              let tokenInfo = null;
+              
+              if (pair.baseToken?.address === mint) {
+                tokenInfo = pair.baseToken;
+              } else if (pair.quoteToken?.address === mint) {
+                tokenInfo = pair.quoteToken;
+              }
+              
+              if (tokenInfo && tokenInfo.name && tokenInfo.name !== 'Unknown Token') {
+                console.log(`[TestToken] Found DexScreener metadata: ${tokenInfo.name}`);
+                tokenMetadata.name = tokenInfo.name;
+                tokenMetadata.symbol = tokenInfo.symbol || tokenMetadata.symbol;
+              }
+            }
+          } catch (dexError) {
+            console.error('[TestToken] Error fetching from DexScreener:', dexError);
+          }
+        }
+        
         // If Helius doesn't have symbol/name, try getting from on-chain
         if (tokenMetadata.symbol === 'UNKNOWN' || !tokenMetadata.symbol) {
           const rpcUrl = process.env.HELIUS_RPC_URL || '';
@@ -95,6 +168,13 @@ router.post('/api/tokens/enrich-test', async (req: Request, res: Response) => {
             symbol: 'UNKNOWN',
             name: 'Unknown Token'
           };
+          
+          // Apply same intelligent fallback in RPC fallback
+          if (!tokenMetadata.name || tokenMetadata.name === 'Unknown Token') {
+            if (tokenMetadata.symbol && tokenMetadata.symbol !== 'UNKNOWN') {
+              tokenMetadata.name = tokenMetadata.symbol;
+            }
+          }
         }
       } catch (fallbackError) {
         console.error('[TestToken] Fallback RPC also failed:', fallbackError);

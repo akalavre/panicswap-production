@@ -24,25 +24,60 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Delegate clicks on protection buttons
         document.addEventListener('click', handleProtectionClick);
+        
+        // Apply correct theme to all protection buttons on initial load
+        setTimeout(initializeProtectionButtons, 100);
     });
+    
+    // Initialize protection button states on page load
+    function initializeProtectionButtons() {
+        const buttons = document.querySelectorAll('[data-protection-btn]');
+        buttons.forEach(btn => {
+            const isProtected = btn.dataset.protected === 'true';
+            // Apply the theme without triggering events
+            applyProtectedTheme(btn, isProtected);
+            // Set proper accessibility attributes
+            btn.setAttribute('aria-label', isProtected ? 'Disable protection' : 'Enable protection');
+            btn.setAttribute('title', isProtected ? 'Click to disable protection' : 'Click to enable protection');
+            btn.setAttribute('aria-pressed', isProtected.toString());
+        });
+    }
     
     // Handle protection button clicks
     function handleProtectionClick(e) {
+        console.log('Protection click handler triggered', e.target);
+        
         // Check for settings button
-        const settingsBtn = e.target.closest('[data-protection-settings]');
+        const settingsBtn = e.target.closest('.protection-settings-btn');
         if (settingsBtn) {
             e.preventDefault();
             e.stopPropagation();
+            
+            console.log('Settings button clicked!');
             
             const tokenMint = settingsBtn.dataset.mint;
             const tokenSymbol = settingsBtn.dataset.symbol || 'Token';
             const tokenName = settingsBtn.dataset.name || '';
             const tokenIcon = settingsBtn.dataset.icon || '';
             
+            console.log('Token data:', { tokenMint, tokenSymbol, tokenName, tokenIcon });
+            
             // Get current settings for this token
             getCurrentProtectionSettings(tokenMint).then(settings => {
+                console.log('Retrieved settings:', settings);
                 if (window.openProtectionSettings) {
                     window.openProtectionSettings(tokenMint, tokenSymbol, settings, tokenName, tokenIcon);
+                } else {
+                    // If openProtectionSettings is not available yet, try again after a delay
+                    console.warn('openProtectionSettings not available, waiting for modal to load...');
+                    setTimeout(() => {
+                        if (window.openProtectionSettings) {
+                            window.openProtectionSettings(tokenMint, tokenSymbol, settings, tokenName, tokenIcon);
+                        } else {
+                            console.error('Protection settings modal not loaded. Please refresh the page.');
+                            showNotification('Protection settings not available. Please refresh the page.', 'error');
+                        }
+                    }, 500);
                 }
             });
             return;
@@ -439,6 +474,26 @@
         btn.setAttribute('title', isProtected ? 'Click to disable protection' : 'Click to enable protection');
         btn.setAttribute('aria-pressed', isProtected.toString());
         
+        // Also update the protection badge in the same row if it exists
+        const row = btn.closest('tr');
+        if (row) {
+            const protectionBadgeCell = row.querySelector('td:nth-last-child(2)'); // Protection column is second from last
+            if (protectionBadgeCell) {
+                if (isProtected) {
+                    protectionBadgeCell.innerHTML = `
+                        <div class="inline-flex items-center px-2 py-1 rounded-full bg-primary-900/60 text-primary-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield h-3 w-3 mr-1"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>
+                            <span class="text-xs font-medium">Protected</span>
+                        </div>`;
+                } else {
+                    protectionBadgeCell.innerHTML = `
+                        <div class="inline-flex items-center px-2 py-1 rounded-full bg-gray-800 text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield h-3 w-3 mr-1 opacity-50"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>
+                            <span class="text-xs">Not Protected</span>
+                        </div>`;
+                }
+            }
+        }
     }
     
     // Update protection counts in UI (simplified - just triggers the counter refresh)
@@ -557,7 +612,8 @@
     window.protectionToggle = {
         updateButtonState,
         updateProtectionCounts,
-        getCurrentProtectionSettings
+        getCurrentProtectionSettings,
+        initializeProtectionButtons
     };
     
 })();

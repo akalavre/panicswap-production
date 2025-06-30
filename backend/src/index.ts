@@ -333,7 +333,7 @@ async function main() {
     // Social monitoring service removed - no longer needed
     liquidityVelocityTracker.stop();
     rugPatternDetector.stop();
-    mlRiskIntegrationService.stop();
+    // mlRiskIntegrationService.stop();
     monitoringStatsService.stop();
     continuousDataFetcher.stop();
     // Stop mempool monitoring service

@@ -156,40 +156,85 @@ export class TokenDataPopulator {
   private async fetchAndStoreMetadata(tokenMint: string): Promise<void> {
     try {
       // Try to fetch metadata from Helius if service is available
+      let metadata: any = null;
       if (this.heliusTokenDiscoveryService && typeof this.heliusTokenDiscoveryService.getTokenMetadata === 'function') {
-        const metadata = await this.heliusTokenDiscoveryService.getTokenMetadata(tokenMint);
-        if (metadata) {
-          await supabase
-            .from('token_metadata')
-            .upsert({
-              mint: tokenMint,
-              symbol: metadata.symbol || 'UNKNOWN',
-              name: metadata.name || 'Unknown Token',
-              uri: metadata.uri,
-              image_url: metadata.image || metadata.imageUrl,
-              decimals: metadata.decimals || 9,
-              is_active: true,
-              platform: 'pump.fun'
-            }, {
-              onConflict: 'mint'
-            });
-          return;
+        metadata = await this.heliusTokenDiscoveryService.getTokenMetadata(tokenMint);
+      }
+      
+      // For pump.fun tokens, try PumpFun Scraper API first as it has the best data
+      if (tokenMint.endsWith('pump')) {
+        console.log(`[TokenDataPopulator] Trying PumpFun Scraper API first for ${tokenMint}`);
+        const pumpFunMetadata = await this.fetchFromPumpFunMetadata(tokenMint);
+        if (pumpFunMetadata && pumpFunMetadata.name && pumpFunMetadata.name !== 'Unknown Token') {
+          metadata = pumpFunMetadata;
+          console.log(`[TokenDataPopulator] Got metadata from PumpFun: ${metadata.symbol} - ${metadata.name}`);
         }
       }
       
-      // Fallback: Set basic metadata
-      await supabase
+      // If still no metadata and Helius has bad data, continue to other sources
+      if ((!metadata || !metadata.name || metadata.name === 'Unknown Token') && this.heliusTokenDiscoveryService) {
+        // Helius already tried above
+      }
+      
+      // If still no good metadata, try DexScreener
+      if (!metadata || !metadata.name || metadata.name === 'Unknown Token') {
+        console.log(`[TokenDataPopulator] Trying DexScreener for metadata ${tokenMint}`);
+        const dexScreenerMetadata = await this.fetchMetadataFromDexScreener(tokenMint);
+        if (dexScreenerMetadata && dexScreenerMetadata.name && dexScreenerMetadata.name !== 'Unknown Token') {
+          metadata = dexScreenerMetadata;
+        }
+      }
+      
+      // Store metadata if we have it
+      if (metadata) {
+        // Add intelligent fallback for name
+        let finalName = metadata.name || 'Unknown Token';
+        if (!metadata.name || metadata.name === 'Unknown Token') {
+          if (metadata.symbol && metadata.symbol !== 'UNKNOWN') {
+            finalName = metadata.symbol;
+            console.log(`[TokenDataPopulator] Using symbol as name: ${finalName}`);
+          }
+        }
+        
+        await supabase
+          .from('token_metadata')
+          .upsert({
+            mint: tokenMint,
+            symbol: metadata.symbol || 'UNKNOWN',
+            name: finalName,
+            uri: metadata.uri,
+            image_url: metadata.image || metadata.imageUrl || metadata.image_url,
+            decimals: metadata.decimals || 9,
+            is_active: true,
+            platform: metadata.platform || 'pump.fun'
+          }, {
+            onConflict: 'mint'
+          });
+        return;
+      }
+      
+      // Fallback: Don't update name/symbol if they're already set
+      const { data: existing } = await supabase
         .from('token_metadata')
-        .upsert({
-          mint: tokenMint,
-          symbol: 'UNKNOWN',
-          name: 'Unknown Token',
-          decimals: 9,
-          is_active: true,
-          platform: 'pump.fun'
-        }, {
-          onConflict: 'mint'
-        });
+        .select('symbol, name')
+        .eq('mint', tokenMint)
+        .single();
+      
+      // Only update if the existing data is also unknown
+      if (!existing || existing.symbol === 'UNKNOWN' || existing.name === 'Unknown Token') {
+        await supabase
+          .from('token_metadata')
+          .upsert({
+            mint: tokenMint,
+            symbol: 'UNKNOWN',
+            name: 'Unknown Token',
+            decimals: 9,
+            is_active: true,
+            platform: 'pump.fun'
+          }, {
+            onConflict: 'mint'
+          });
+      }
         
     } catch (error) {
       console.error('[TokenDataPopulator] Error fetching metadata:', error);
@@ -546,6 +591,83 @@ export class TokenDataPopulator {
     } catch (error) {
       console.error('[TokenDataPopulator] Error updating protected token pool:', error);
     }
+  }
+
+  private async fetchFromPumpFunMetadata(tokenMint: string): Promise<any> {
+    try {
+      const axios = require('axios');
+      
+      // Use the same RapidAPI key as in PHP
+      const response = await axios.get('https://pumpfun-scraper-api.p.rapidapi.com/search_tokens', {
+        params: { term: tokenMint },
+        headers: {
+          'x-rapidapi-host': 'pumpfun-scraper-api.p.rapidapi.com',
+          'x-rapidapi-key': '569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22'
+        },
+        timeout: 5000
+      });
+      
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        // Search for exact match
+        const tokenData = response.data.data.find((t: any) => 
+          t.coinMint === tokenMint || t.mint === tokenMint
+        );
+        
+        if (tokenData) {
+          console.log(`[TokenDataPopulator] Found PumpFun metadata for ${tokenMint}: ${tokenData.name}`);
+          return {
+            symbol: tokenData.ticker || tokenData.symbol || 'UNKNOWN',
+            name: tokenData.name || 'Unknown Token',
+            image: tokenData.imageUrl || tokenData.image || null,
+            imageUrl: tokenData.imageUrl || tokenData.image || null,
+            uri: tokenData.imageUrl || null,
+            decimals: 6, // pump.fun tokens use 6 decimals
+            platform: 'pump.fun'
+          };
+        }
+      }
+    } catch (error: any) {
+      console.error('[TokenDataPopulator] Error fetching from PumpFun API:', error.message || error);
+    }
+    return null;
+  }
+
+  private async fetchMetadataFromDexScreener(tokenMint: string): Promise<any> {
+    try {
+      const axios = require('axios');
+      const response = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`, {
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'PanicSwap/1.0'
+        }
+      });
+      
+      if (response.data?.pairs && response.data.pairs.length > 0) {
+        // Get the first pair (usually highest liquidity)
+        const pair = response.data.pairs[0];
+        
+        // Check if our token is the base or quote token
+        let tokenInfo = null;
+        if (pair.baseToken?.address === tokenMint) {
+          tokenInfo = pair.baseToken;
+        } else if (pair.quoteToken?.address === tokenMint) {
+          tokenInfo = pair.quoteToken;
+        }
+        
+        if (tokenInfo && tokenInfo.name && tokenInfo.name !== 'Unknown Token') {
+          console.log(`[TokenDataPopulator] Found DexScreener metadata for ${tokenMint}: ${tokenInfo.name}`);
+          return {
+            symbol: tokenInfo.symbol || 'UNKNOWN',
+            name: tokenInfo.name || 'Unknown Token',
+            // DexScreener doesn't provide image URLs in token data
+            platform: 'dexscreener'
+          };
+        }
+      }
+    } catch (error: any) {
+      console.error('[TokenDataPopulator] Error fetching metadata from DexScreener:', error.message || error);
+    }
+    return null;
   }
 }
 

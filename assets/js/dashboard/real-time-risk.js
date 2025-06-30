@@ -62,8 +62,18 @@
                             lastUpdate: new Date()
                         });
                         
-                        // Update display for this token
-                        updateTokenRiskDisplay(tokenMint);
+        // Update UnifiedBadgeService with monitoring status
+        if (window.UnifiedBadgeService) {
+            window.UnifiedBadgeService.updateToken(tokenMint, {
+                monitoring: {
+                    active: isMonitoring
+                },
+                metadata: {
+                    threshold: riskThreshold,
+                    lastUpdate: new Date()
+                }
+            });
+        }
                     }
                 }
             )
@@ -155,8 +165,32 @@
             showThreatNotification(tokenMint, alert);
         }
         
-        // Update display
-        updateTokenRiskDisplay(tokenMint);
+        // Update UnifiedBadgeService with threat alert data
+        if (window.UnifiedBadgeService) {
+            // Determine badge state based on risk score
+            let badgeState = null;
+            if (riskScore >= 80) badgeState = 'SELL_NOW';
+            else if (riskScore >= 60) badgeState = 'SELL';
+            else if (riskScore >= 40) badgeState = 'VOLATILE';
+            
+            window.UnifiedBadgeService.updateToken(tokenMint, {
+                badgeState: badgeState,
+                monitoring: {
+                    active: true // Threats indicate active monitoring
+                },
+                metadata: {
+                    alerts: {
+                        threatAlert: {
+                            riskScore: riskScore,
+                            recommendation: recommendation,
+                            patterns: patterns,
+                            timestamp: new Date(alert.timestamp || Date.now()),
+                            alertType: alert.alert_type
+                        }
+                    }
+                }
+            });
+        }
     }
     
     /**
@@ -185,8 +219,32 @@
             alerts.splice(10);
         }
         
-        // Update risk badge based on alert severity
-        updateTokenRiskDisplay(tokenMint);
+        // Update UnifiedBadgeService with protection alert
+        if (window.UnifiedBadgeService) {
+            // Determine badge state based on severity
+            const badgeState = severity === 'critical' ? 'SELL_NOW' : 'SELL';
+            
+            window.UnifiedBadgeService.updateToken(tokenMint, {
+                badgeState: badgeState,
+                sellSignal: {
+                    action: severity === 'critical' ? 'PANIC_SELL' : 'SELL',
+                    reason: message
+                },
+                monitoring: {
+                    active: true // Protection alerts indicate active monitoring
+                },
+                metadata: {
+                    alerts: {
+                        protectionAlert: {
+                            severity: severity,
+                            message: message,
+                            timestamp: new Date(alert.created_at || Date.now()),
+                            alertData: alert.alert_data || {}
+                        }
+                    }
+                }
+            });
+        }
         
         // Show notification for critical alerts
         if (severity === 'critical') {
@@ -224,9 +282,37 @@
         monitoring.lastPriceUpdate = timestamp;
         monitoringStatus.set(tokenMint, monitoring);
         
-        // Update risk display if significant price change
+        // Update UnifiedBadgeService if significant price change detected
         if (Math.abs(deltas.change1m) > 5 || Math.abs(deltas.change5m) > 10) {
-            updateTokenRiskDisplay(tokenMint);
+            if (window.UnifiedBadgeService) {
+                // Determine badge state based on price movement
+                let badgeState = null;
+                if (deltas.change1m > 4 || deltas.change5m > 10) {
+                    badgeState = 'PUMPING'; // Positive price movement
+                } else if (Math.abs(deltas.change1m) > 3 || Math.abs(deltas.change5m) > 7) {
+                    badgeState = 'VOLATILE'; // High volatility
+                }
+                
+                window.UnifiedBadgeService.updateToken(tokenMint, {
+                    badgeState: badgeState,
+                    velocities: {
+                        price1m: deltas.change1m,
+                        price5m: deltas.change5m
+                    },
+                    price: {
+                        change1m: deltas.change1m,
+                        change5m: deltas.change5m,
+                        change30m: deltas.change30m
+                    },
+                    monitoring: {
+                        active: true // Price monitoring indicates active monitoring
+                    },
+                    metadata: {
+                        lastPriceUpdate: timestamp,
+                        reason: 'price_change'
+                    }
+                });
+            }
         }
     }
     
@@ -371,25 +457,19 @@
     function updateAllTokenRiskDisplays() {
         if (!window.tokenListV3State?.tokens) return;
         
+        // Console trace for batch updates
+        console.trace('[RiskBadge] source', 'PERIODIC_UPDATE', {
+            tokenCount: window.tokenListV3State.tokens.length,
+            timestamp: new Date().toISOString()
+        });
+        
         window.tokenListV3State.tokens.forEach(token => {
-            updateTokenRiskDisplay(token.token_mint);
-            
             // Fetch current monitoring status for all tokens (not just protected ones)
             // This is needed to detect rugged tokens
             fetchTokenMonitoringStatus(token.token_mint);
         });
     }
     
-    /**
-     * Update risk display for a specific token
-     */
-    function updateTokenRiskDisplay(tokenMint) {
-        const badgeElement = document.querySelector(`[data-risk-badge="${tokenMint}"]`);
-        if (!badgeElement) return;
-        
-        const badge = createRealTimeRiskBadge(tokenMint);
-        badgeElement.innerHTML = badge;
-    }
     
     /**
      * Fetch current monitoring status for a token
@@ -403,13 +483,27 @@
             const basePath = window.location.pathname.includes('/PanicSwap-php') ? '/PanicSwap-php' : '';
             
             // Fetch from PHP monitoring API which includes liquidity and price data
-            const response = await fetch(`${basePath}/api/monitoring-status.php/${tokenMint}?wallet=${walletAddress}`);
+            // Add cache buster to force fresh data after badge system update
+            const cacheBuster = Date.now();
+            const response = await fetch(`${basePath}/api/monitoring-status.php/${tokenMint}?wallet=${walletAddress}&_t=${cacheBuster}`);
             if (response.ok) {
                 const apiData = await response.json();
                 console.log('[RealTimeRisk] Fetched monitoring status:', apiData);
                 
+                // Console trace for live monitoring data fetches
+                console.trace('[RiskBadge] source', 'LIVE_MONITORING_FETCH', {
+                    tokenMint: tokenMint,
+                    apiResponse: {
+                        monitoring: apiData.monitoring?.active || false,
+                        status: apiData.status,
+                        alerts: Object.keys(apiData.alerts || {}),
+                        patterns: Object.keys(apiData.patterns || {})
+                    },
+                    timestamp: new Date().toISOString()
+                });
+                
                 monitoringStatus.set(tokenMint, {
-                    monitoring: apiData.monitoring?.active || false,
+                    monitoring: apiData.monitoring || { active: false },  // Store the entire monitoring object with proper structure
                     threshold: apiData.monitoring?.riskThreshold || 'HIGH',
                     liquidity: apiData.liquidity || { current: 0, change1m: 0, change5m: 0 },
                     price: apiData.price || { change1m: 0, change5m: 0 },
@@ -417,13 +511,41 @@
                     patterns: apiData.patterns || {},
                     stats: apiData.stats || {},
                     marketData: apiData.marketData || {},
+                    mlAnalysis: apiData.mlAnalysis || {},
+                    sellSignal: apiData.sellSignal || null,  // Add sell signal data
+                    badgeState: apiData.badgeState || null,  // NEW: Badge state for traders
                     status: apiData.status,
-                    rugged: apiData.status === 'RUGGED',
+                    rugged: apiData.status === 'RUGGED' || apiData.badgeState === 'RUGGED',
                     lastUpdate: new Date(apiData.lastUpdate || Date.now())
                 });
                 
-                // Update display immediately
-                updateTokenRiskDisplay(tokenMint);
+                // Update UnifiedBadgeService with monitoring data
+                const monitoring = monitoringStatus.get(tokenMint);
+                if (monitoring && window.UnifiedBadgeService) {
+                    window.UnifiedBadgeService.updateToken(tokenMint, {
+                        badgeState: monitoring.badgeState,
+                        sellSignal: monitoring.sellSignal,
+                        status: monitoring.status,
+                        liquidity: monitoring.liquidity,
+                        price: monitoring.price,
+                        velocities: {
+                            price5m: monitoring.price?.change5m || 0,
+                            price1m: monitoring.price?.change1m || 0,
+                            liquidity5m: monitoring.liquidity?.change5m || 0,
+                            liquidity1m: monitoring.liquidity?.change1m || 0
+                        },
+                        monitoring: monitoring.monitoring,
+                        protectionEnabled: monitoring.monitoring?.active || monitoring.monitoring?.mempoolEnabled || false,
+                        metadata: {
+                            alerts: monitoring.alerts,
+                            patterns: monitoring.patterns,
+                            stats: monitoring.stats,
+                            marketData: monitoring.marketData,
+                            mlAnalysis: monitoring.mlAnalysis,
+                            lastUpdate: monitoring.lastUpdate
+                        }
+                    });
+                }
                 return;
             }
         } catch (error) {
@@ -446,13 +568,24 @@
                 console.log('[RealTimeRisk] Fetched fallback monitoring status:', data);
                 
                 monitoringStatus.set(tokenMint, {
-                    monitoring: { active: data.mempool_monitoring || false },
+                    monitoring: { active: data.mempool_monitoring || false, mempoolEnabled: data.mempool_monitoring || false },
                     threshold: data.risk_threshold || 'HIGH',
                     lastUpdate: new Date()
                 });
                 
-                // Update display immediately
-                updateTokenRiskDisplay(tokenMint);
+                // Update UnifiedBadgeService with basic monitoring data
+                if (window.UnifiedBadgeService) {
+                    window.UnifiedBadgeService.updateToken(tokenMint, {
+                        monitoring: { 
+                            active: data.mempool_monitoring || false, 
+                            mempoolEnabled: data.mempool_monitoring || false 
+                        },
+                        metadata: {
+                            threshold: data.risk_threshold || 'HIGH',
+                            lastUpdate: new Date()
+                        }
+                    });
+                }
             }
         } catch (error) {
             console.error('[RealTimeRisk] Error fetching monitoring status:', error);
@@ -462,7 +595,15 @@
     /**
      * Create real-time risk badge
      */
-    function createRealTimeRiskBadge(tokenMint) {
+    function createRealTimeRiskBadge(tokenMint, riskData = null) {
+        // This function is now deprecated - UnifiedBadgeService handles all badge rendering
+        // Return a placeholder that will be replaced by UnifiedBadgeService
+        return `<div data-risk-badge="${tokenMint}"></div>`;
+    }
+    
+    // Original implementation kept for reference but not used
+    function _createRealTimeRiskBadgeLegacy(tokenMint, riskData = null) {
+        // Use provided data or fall back to monitoring cache
         const monitoring = monitoringStatus.get(tokenMint);
         const threat = threatCache.get(tokenMint);
         
@@ -471,6 +612,18 @@
         const isRugged = token?.status === 'RUGGED' || 
                         monitoring?.rugged === true ||
                         monitoring?.status === 'RUGGED';
+        
+        // Debug logging
+        console.log('[RealTimeRisk] Creating badge for token:', tokenMint, {
+            token_data: token ? {
+                risk_level: token.risk_level,
+                risk_score: token.risk_score,
+                ml_risk_level: token.ml_risk_level,
+                ml_risk_score: token.ml_risk_score
+            } : 'no token data',
+            monitoring: monitoring,
+            threat: threat
+        });
         
         if (isRugged) {
             const colorClasses = 'bg-black/30 border-gray-700 text-gray-500';
@@ -486,18 +639,89 @@
             `;
         }
         
-        // Determine status
+        // Determine status - First check if we have token data with risk information
         let status = 'inactive';
         let color = 'gray';
         let text = 'Not Monitored';
         let icon = '';
         let tooltipText = '';
         
-        if (monitoring?.monitoring) {
-            status = 'monitoring';
-            color = 'blue';
-            text = 'Monitoring';
-            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
+        // Use token's inherent risk data first
+        if (token && (token.risk_level || token.risk_score !== undefined)) {
+            const riskLevel = token.risk_level || token.ml_risk_level;
+            const riskScore = token.risk_score || token.ml_risk_score || 0;
+            
+            // Map risk levels to display
+            switch((riskLevel || '').toUpperCase()) {
+                case 'CRITICAL':
+                    text = 'Critical';
+                    color = 'red';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                    tooltipText = `Risk Score: ${riskScore}%`;
+                    break;
+                case 'HIGH':
+                    text = 'High';
+                    color = 'orange';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                    tooltipText = `Risk Score: ${riskScore}%`;
+                    break;
+                case 'MODERATE':
+                    text = 'Moderate';
+                    color = 'yellow';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                    tooltipText = `Risk Score: ${riskScore}%`;
+                    break;
+                case 'LOW':
+                    text = 'Low';
+                    color = 'blue';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                    tooltipText = `Risk Score: ${riskScore}%`;
+                    break;
+                case 'MINIMAL':
+                case 'SAFE':
+                    text = 'Safe';
+                    color = 'green';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                    tooltipText = `Risk Score: ${riskScore}%`;
+                    break;
+                default:
+                    // If no risk level provided, keep as analyzing
+                    if (!riskLevel) {
+                        text = 'Analyzing';
+                        color = 'gray';
+                        icon = '<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+                        tooltipText = 'Analyzing token data...';
+                    } else if (riskScore !== undefined && riskScore !== null) {
+                        // If we have a risk score, calculate from score
+                        if (riskScore >= 80) {
+                            text = 'Critical';
+                            color = 'red';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                        } else if (riskScore >= 60) {
+                            text = 'High';
+                            color = 'orange';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                        } else if (riskScore >= 40) {
+                            text = 'Moderate';
+                            color = 'yellow';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                        } else if (riskScore >= 20) {
+                            text = 'Low';
+                            color = 'blue';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                        } else {
+                            text = 'Safe';
+                            color = 'green';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                        }
+                        tooltipText = `Risk Score: ${riskScore}%`;
+                    }
+            }
+        }
+        
+        // Then check monitoring status and override ONLY if there are actual alerts
+        if (monitoring?.monitoring?.active && (monitoring.alerts || monitoring.patterns)) {
+            // Keep the existing risk display from token data unless there are active alerts
             
             // Check monitoring data for alerts
             if (monitoring.alerts?.flashRug || monitoring.alerts?.rapidDrain) {
@@ -520,10 +744,51 @@
                 icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>';
                 tooltipText = 'Price or liquidity dropping rapidly';
             } else {
-                text = 'Safe';
-                color = 'green';
-                icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
-                tooltipText = 'No threats detected';
+                // Check ML risk level if available
+                const mlRisk = monitoring.mlAnalysis?.riskLevel;
+                const mlProbability = monitoring.mlAnalysis?.rugProbability || 0;
+                const mlConfidence = monitoring.mlAnalysis?.confidence || 0;
+                
+                if (mlRisk && mlConfidence > 50) {
+                    // Use ML risk level with high confidence
+                    switch(mlRisk.toUpperCase()) {
+                        case 'CRITICAL':
+                            text = 'Critical';
+                            color = 'red';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                            tooltipText = `ML Risk: ${mlProbability.toFixed(0)}% rug probability`;
+                            break;
+                        case 'HIGH':
+                            text = 'High';
+                            color = 'orange';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                            tooltipText = `ML Risk: ${mlProbability.toFixed(0)}% rug probability`;
+                            break;
+                        case 'MODERATE':
+                            text = 'Moderate';
+                            color = 'yellow';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                            tooltipText = `ML Risk: ${mlProbability.toFixed(0)}% rug probability`;
+                            break;
+                        case 'LOW':
+                            text = 'Low';
+                            color = 'blue';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                            tooltipText = `ML Risk: ${mlProbability.toFixed(0)}% rug probability`;
+                            break;
+                        default:
+                            text = 'Safe';
+                            color = 'green';
+                            icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                            tooltipText = 'No threats detected';
+                    }
+                } else if (!token || (!token.risk_level && token.risk_score === undefined)) {
+                    // Only default to Safe if we truly have no risk data at all
+                    text = 'Safe';
+                    color = 'green';
+                    icon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                    tooltipText = 'No threats detected';
+                }
             }
             
             // Check for active threat from pattern_alerts
@@ -546,15 +811,24 @@
             }
         }
         
+        // Debug monitoring data
+        console.log('[RealTimeRisk] Building tooltip data for', tokenMint, {
+            monitoring_object: monitoring,
+            monitoring_property: monitoring?.monitoring,
+            monitoring_active_from_property: monitoring?.monitoring?.active,
+            should_be_active: monitoring?.monitoring?.active || monitoring?.monitoring?.mempoolEnabled
+        });
+        
         // Build tooltip data
         const tooltipData = {
-            monitoring: monitoring?.monitoring || false,
+            monitoring: monitoring?.monitoring?.active || monitoring?.monitoring?.mempoolEnabled || false,  // Check both active and mempoolEnabled
             threshold: monitoring?.threshold || 'N/A',
             liquidity: monitoring?.liquidity || null,
             price: monitoring?.price || null,
             alerts: monitoring?.alerts || null,
             patterns: monitoring?.patterns || null,
             threat: threat || null,
+            mlAnalysis: monitoring?.mlAnalysis || null,
             lastUpdate: monitoring?.lastUpdate || null,
             tooltipText: tooltipText
         };
@@ -562,6 +836,7 @@
         // Color classes
         const colorClasses = {
             red: 'bg-red-500/10 border-red-500/20 text-red-400',
+            orange: 'bg-orange-500/10 border-orange-500/20 text-orange-400',
             yellow: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
             blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
             green: 'bg-green-500/10 border-green-500/20 text-green-400',
@@ -576,7 +851,7 @@
                   data-tooltip='${JSON.stringify(tooltipData)}'>
                 ${icon}
                 <span>${text}</span>
-                ${monitoring?.monitoring ? '<span class="w-1.5 h-1.5 bg-current rounded-full animate-pulse"></span>' : ''}
+                ${(monitoring?.monitoring?.active || monitoring?.monitoring?.mempoolEnabled) ? '<span class="w-1.5 h-1.5 bg-current rounded-full animate-pulse"></span>' : ''}
             </span>
         `;
     }
@@ -775,13 +1050,60 @@
     window.addEventListener('beforeunload', cleanup);
     window.addEventListener('unload', cleanup);
     
+    /**
+     * Render badge function - now delegates to UnifiedBadgeService
+     * @deprecated Use window.UnifiedBadgeService directly
+     */
+    function renderBadge(tokenMint) {
+        // Delegate to UnifiedBadgeService if available
+        if (window.UnifiedBadgeService) {
+            // Trigger a render by updating the token (even if no data change)
+            window.UnifiedBadgeService.renderBadge(tokenMint);
+            return;
+        }
+        
+        // Fallback to atomic badge renderer if available
+        if (window.atomicBadgeRenderer) {
+            window.atomicBadgeRenderer.renderBadge(tokenMint);
+            return;
+        }
+        
+        // Final fallback - just create placeholder
+        const badgeElement = document.querySelector(`[data-risk-badge="${tokenMint}"]`);
+        if (badgeElement) {
+            badgeElement.innerHTML = createRealTimeRiskBadge(tokenMint);
+        }
+    }
+    
+    // Listen for badge update events from UnifiedBadgeService
+    document.addEventListener('badgeupdated', ({detail}) => {
+        // Badge has already been updated by UnifiedBadgeService
+        console.log('[RealTimeRisk] Badge updated for', detail.tokenMint);
+    });
+    
+    console.log('[RealTimeRisk] Event listener registered for badge update events');
+    
     // Expose API for token list integration
     window.realTimeRisk = {
-        updateTokenRiskDisplay,
+        renderBadge,
         updateAllTokenRiskDisplays,
         createRealTimeRiskBadge,
         fetchTokenMonitoringStatus,
-        cleanup
+        cleanup,
+        // Add manual refresh method
+        refreshMonitoringStatus: function(tokenMint) {
+            console.log('[RealTimeRisk] Manual refresh requested for', tokenMint);
+            // Clear cached data to force fresh fetch
+            monitoringStatus.delete(tokenMint);
+            // Fetch fresh data
+            fetchTokenMonitoringStatus(tokenMint);
+        },
+        // Force refresh all tokens
+        forceRefreshAll: function() {
+            console.log('[RealTimeRisk] Force refreshing all tokens');
+            monitoringStatus.clear();
+            updateAllTokenRiskDisplays();
+        }
     };
     
 })();

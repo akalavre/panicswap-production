@@ -53,7 +53,9 @@ try {
         ];
         
         // Call save-subscription.php endpoint
-        $ch = curl_init('http://localhost/PanicSwap-php/api/save-subscription.php');
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $ch = curl_init($protocol . '://' . $host . '/api/save-subscription.php');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($subscriptionData));

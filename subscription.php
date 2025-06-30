@@ -176,7 +176,7 @@
         <!-- Page Header -->
         <div class="mb-8">
             <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-                <a href="dashboard.php" class="hover:text-gray-300 transition-colors">Dashboard</a>
+                <a href="/dashboard" class="hover:text-gray-300 transition-colors">Dashboard</a>
                 <span>/</span>
                 <span class="text-gray-300">Subscription Management</span>
             </div>
@@ -328,7 +328,7 @@
                         <div class="text-2xl font-bold text-white mb-1">$40.26</div>
                         <p class="text-xs text-gray-500 mb-4">per week</p>
                         <ul class="space-y-2 text-sm text-gray-400">
-                            <li>• Up to 50 tokens</li>
+                            <li>• Up to 5 tokens</li>
                             <li>• Major DEXs</li>
                             <li>• 24/7 monitoring</li>
                         </ul>
@@ -344,7 +344,7 @@
                         <div class="text-2xl font-bold text-white mb-1">$80.91</div>
                         <p class="text-xs text-gray-500 mb-4">per week</p>
                         <ul class="space-y-2 text-sm text-gray-400">
-                            <li>• Up to 100 tokens</li>
+                            <li>• Up to 10 tokens</li>
                             <li>• Pre-DEX tokens</li>
                             <li>• Pump.fun support</li>
                         </ul>
@@ -360,7 +360,7 @@
                         <div class="text-2xl font-bold text-white mb-1">$121.53</div>
                         <p class="text-xs text-gray-500 mb-4">per week</p>
                         <ul class="space-y-2 text-sm text-gray-400">
-                            <li>• Unlimited tokens</li>
+                            <li>• Up to 25 tokens</li>
                             <li>• All DEXs + Private</li>
                             <li>• Dedicated support</li>
                         </ul>
@@ -446,7 +446,7 @@
                         Are you sure you want to cancel your Pro subscription? You'll lose access to:
                     </p>
                     <ul class="space-y-2 mb-6 text-sm text-gray-300">
-                        <li>• Protection for up to 50 tokens</li>
+                        <li>• Protection for up to 25 tokens</li>
                         <li>• 24/7 background monitoring</li>
                         <li>• Major DEX coverage</li>
                         <li>• Priority execution speeds</li>
@@ -473,8 +473,10 @@
     <?php include 'components/payment-modal.php'; ?>
     
     <!-- Scripts -->
+    <script src="assets/js/wallet-state.js"></script>
     <script src="assets/js/main.js"></script>
     <script src="assets/js/wallet-adapter.js"></script>
+    <script src="assets/js/wallet-button-ui.js"></script>
     <script src="assets/js/protection-events.js"></script>
     <script src="assets/js/auto-sell.js"></script>
     <script src="assets/js/payment-config.js"></script>
@@ -506,9 +508,9 @@
                     priceInSol: 0.248,
                     weeklyPrice: 40.26,
                     monthlyPrice: 161.04,
-                    tokensLimit: 50,
+                    tokensLimit: 5,
                     walletsLimit: 3,
-                    features: ['Graduated tokens (DEX)', 'Up to 50 tokens', '< 2 seconds response', 'Major DEXs coverage', 'Email + Telegram alerts', '24/7 Background monitoring']
+                    features: ['Graduated tokens (DEX)', 'Up to 5 tokens', '< 2 seconds response', 'Major DEXs coverage', 'Email + Telegram alerts', '24/7 Background monitoring']
                 },
                 degen: {
                     name: 'Degen Mode',
@@ -517,9 +519,9 @@
                     priceInSol: 0.498,
                     weeklyPrice: 80.91,
                     monthlyPrice: 323.63,
-                    tokensLimit: 100,
+                    tokensLimit: 20,
                     walletsLimit: 5,
-                    features: ['New launches (pre-DEX)', 'Up to 100 tokens', '< 1 second response', 'Memecoin launchpads', 'Pump.fun support', '24/7 Background monitoring']
+                    features: ['New launches (pre-DEX)', 'Up to 10 tokens', '< 1 second response', 'Memecoin launchpads', 'Pump.fun support', '24/7 Background monitoring']
                 },
                 enterprise: {
                     name: 'Enterprise',
@@ -528,9 +530,9 @@
                     priceInSol: 0.748,
                     weeklyPrice: 121.53,
                     monthlyPrice: 486.12,
-                    tokensLimit: -1, // Unlimited
+                    tokensLimit: 50,
                     walletsLimit: -1, // Unlimited
-                    features: ['All tokens', 'Unlimited protection', '< 1 second response', 'All DEXs + Private pools', 'Dedicated manager', '24/7 Background monitoring']
+                    features: ['All tokens', 'Up to 25 tokens', '< 1 second response', 'All DEXs + Private pools', 'Dedicated manager', '24/7 Background monitoring']
                 }
             };
         }
@@ -547,7 +549,7 @@
             if (!walletAddress) {
                 console.warn('No wallet connected, redirecting...');
                 setTimeout(() => {
-                    window.location.href = 'index.php';
+                    window.location.href = '/';
                 }, 1000);
                 return;
             }
@@ -974,7 +976,7 @@
                             Are you sure you want to downgrade to the Basic plan? You'll lose access to:
                         </p>
                         <ul class="space-y-2 mb-6 text-sm text-gray-300">
-                            <li>• Protection for up to 50 tokens (limited to 5)</li>
+                            <li>• Protection for up to 5 tokens (limited to 1)</li>
                             <li>• 24/7 background monitoring</li>
                             <li>• Major DEX coverage (Raydium only)</li>
                             <li>• Priority execution speeds</li>

@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Handle tokens endpoint
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^tokens/(.*)$ tokens.php/$1 [L,QSA]
+
+# Allow access to PHP files
+<Files *.php>
+    Require all granted
+</Files>

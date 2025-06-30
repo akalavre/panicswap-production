@@ -19,7 +19,15 @@ class SubscriptionManager {
     }
     
     async getConnectedWallet() {
-        // Check localStorage for saved wallet - use consistent key
+        // Use WalletState for wallet information
+        if (window.walletState && window.walletState.state) {
+            const state = window.walletState.state;
+            if (state && state.status === 'connected' && state.address) {
+                return state.address;
+            }
+        }
+        
+        // Fallback to localStorage for backwards compatibility
         const savedWallet = localStorage.getItem('walletAddress');
         if (savedWallet) return savedWallet;
         
@@ -28,7 +36,7 @@ class SubscriptionManager {
             try {
                 const resp = await window.solana.connect({ onlyIfTrusted: true });
                 const wallet = resp.publicKey.toString();
-                localStorage.setItem('walletAddress', wallet);
+                // Note: WalletState now handles wallet address storage
                 return wallet;
             } catch (err) {
                 console.log('No trusted wallet connection');
@@ -157,21 +165,21 @@ class SubscriptionManager {
     getFeaturesList(plan) {
         const features = {
             'Pro': [
-                'Up to 50 protected tokens',
+                '5 protected tokens',
                 '< 2 second response time',
                 'Major DEX coverage',
                 'Email & Telegram alerts',
                 'Basic MEV protection'
             ],
             'Degen Mode': [
-                'Up to 100 protected tokens',
+                '20 protected tokens',
                 '< 1 second response time',
                 'Memecoin launchpad coverage',
                 'Pump.fun integration',
                 'Jito bundle protection'
             ],
             'Enterprise': [
-                'Unlimited protected tokens',
+                '50 protected tokens',
                 '< 1 second response time',
                 'All DEXs + Private pools',
                 'Dedicated account manager',

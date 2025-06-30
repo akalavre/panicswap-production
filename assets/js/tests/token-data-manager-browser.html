@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenDataManager Browser Smoke Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+        .test-results {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .test-case {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .test-pass {
+            background-color: #0f5132;
+            border-left: 4px solid #0a3622;
+        }
+        .test-fail {
+            background-color: #842029;
+            border-left: 4px solid #58151c;
+        }
+        .test-info {
+            background-color: #055160;
+            border-left: 4px solid #0a58ca;
+        }
+        .run-button {
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .run-button:hover {
+            background-color: #0b5ed7;
+        }
+        pre {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>TokenDataManager Browser Smoke Test</h1>
+    <p>This test validates that <code>TokenDataManager.getMultipleTokensData()</code> works correctly with mocked fetch responses.</p>
+    
+    <button class="run-button" onclick="runTests()">Run Tests</button>
+    
+    <div id="test-results" class="test-results">
+        <div class="test-case test-info">Click "Run Tests" to start the automated smoke test.</div>
+    </div>
+
+    <!-- Load TokenDataManager -->
+    <script src="../services/TokenDataManager.js"></script>
+    
+    <script>
+        // Mock response data from step 1
+        const mockApiResponse = {
+            "tokens": [
+                {
+                    "tokenMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+                    "walletAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+                    "symbol": "USDC",
+                    "name": "USD Coin",
+                    "logoUrl": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+                    "balance": 1000000000,
+                    "decimals": 6,
+                    "userBalance": 1000000000,
+                    "price": 0.9999,
+                    "userValue": 999.9,
+                    "liquidity": 50000000,
+                    "priceChange24h": 0.01,
+                    "priceChange5m": 0.001,
+                    "volume24h": 1000000,
+                    "marketCap": 32000000000,
+                    "holders": 500000,
+                    "createdAt": "2021-06-01T00:00:00Z",
+                    "monitoring": {
+                        "active": true,
+                        "alerts": {
+                            "flashRug": false,
+                            "rapidDrain": false
+                        }
+                    },
+                    "protection": {
+                        "isActive": true
+                    },
+                    "risk": {
+                        "score": 1,
+                        "level": "LOW"
+                    },
+                    "developerActivity": {
+                        "percentage": 0,
+                        "creatorBalance": 0
+                    },
+                    "badgeState": "verified",
+                    "isTestToken": false
+                },
+                {
+                    "tokenMint": "So11111111111111111111111111111111111111112",
+                    "walletAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+                    "symbol": "SOL",
+                    "name": "Wrapped SOL",
+                    "logoUrl": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+                    "balance": 2000000000,
+                    "decimals": 9,
+                    "userBalance": 2000000000,
+                    "price": 185.50,
+                    "userValue": 371.0,
+                    "liquidity": 25000000,
+                    "priceChange24h": 5.25,
+                    "priceChange5m": 0.15,
+                    "volume24h": 5000000,
+                    "marketCap": 85000000000,
+                    "holders": 1000000,
+                    "createdAt": "2020-04-01T00:00:00Z",
+                    "monitoring": {
+                        "active": true,
+                        "alerts": {
+                            "flashRug": false,
+                            "rapidDrain": false
+                        }
+                    },
+                    "protection": {
+                        "isActive": false
+                    },
+                    "risk": {
+                        "score": 2,
+                        "level": "LOW"
+                    },
+                    "developerActivity": {
+                        "percentage": 5,
+                        "creatorBalance": 2
+                    },
+                    "badgeState": "verified",
+                    "isTestToken": false
+                }
+            ]
+        };
+
+        // Test utility functions
+        function logTest(name, passed, details = null) {
+            const resultsDiv = document.getElementById('test-results');
+            const testDiv = document.createElement('div');
+            testDiv.className = `test-case ${passed ? 'test-pass' : 'test-fail'}`;
+            
+            let content = `${passed ? '✓' : '✗'} ${name}`;
+            if (details) {
+                content += `<pre>${details}</pre>`;
+            }
+            
+            testDiv.innerHTML = content;
+            resultsDiv.appendChild(testDiv);
+        }
+
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
+            }
+        }
+
+        function assertType(value, expectedType, fieldName) {
+            const actualType = typeof value;
+            if (actualType !== expectedType) {
+                throw new Error(`Expected ${fieldName} to be ${expectedType}, got ${actualType}`);
+            }
+        }
+
+        function assertProperty(obj, property) {
+            if (!obj.hasOwnProperty(property)) {
+                throw new Error(`Expected object to have property '${property}'`);
+            }
+        }
+
+        // Mock fetch to return our saved responses
+        function mockFetch() {
+            const originalFetch = window.fetch;
+            let callCount = 0;
+            
+            window.fetch = async function(url, options) {
+                callCount++;
+                
+                // Simulate individual token API calls
+                if (url.includes('api/v2/tokens/')) {
+                    const tokenIndex = url.includes('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') ? 0 : 1;
+                    return {
+                        ok: true,
+                        json: async () => mockApiResponse.tokens[tokenIndex]
+                    };
+                }
+                
+                // Simulate batch API call
+                if (url.includes('api/v2/batch-simple.php')) {
+                    return {
+                        ok: true,
+                        json: async () => mockApiResponse
+                    };
+                }
+                
+                // Default response
+                return {
+                    ok: true,
+                    json: async () => ({ tokens: [] })
+                };
+            };
+            
+            return {
+                restore: () => { window.fetch = originalFetch; },
+                getCallCount: () => callCount
+            };
+        }
+
+        // Main test runner
+        async function runTests() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<div class="test-case test-info">Running tests...</div>';
+            
+            let testsPassed = 0;
+            let testsTotal = 0;
+
+            // Test 1: Basic functionality
+            testsTotal++;
+            try {
+                const mockFetchControl = mockFetch();
+                
+                const tokenMints = ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'So11111111111111111111111111111111111111112'];
+                const walletAddress = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM';
+                
+                const result = await TokenDataManager.getMultipleTokensData(tokenMints, walletAddress);
+                
+                // Verify result is an array
+                assert(Array.isArray(result), 'Result should be an array');
+                assert(result.length === 2, 'Result should contain 2 tokens');
+                
+                mockFetchControl.restore();
+                logTest('Basic API call returns array with expected length', true);
+                testsPassed++;
+            } catch (error) {
+                logTest('Basic API call returns array with expected length', false, error.message);
+            }
+
+            // Test 2: Field names and types validation
+            testsTotal++;
+            try {
+                const mockFetchControl = mockFetch();
+                
+                const tokenMints = ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'];
+                const walletAddress = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM';
+                
+                const result = await TokenDataManager.getMultipleTokensData(tokenMints, walletAddress);
+                const token = result[0];
+                
+                // Core identifiers
+                assertProperty(token, 'token_mint');
+                assertType(token.token_mint, 'string', 'token_mint');
+                assertProperty(token, 'wallet_address');
+                assertType(token.wallet_address, 'string', 'wallet_address');
+                
+                // Token metadata
+                assertProperty(token, 'symbol');
+                assertType(token.symbol, 'string', 'symbol');
+                assertProperty(token, 'name');
+                assertType(token.name, 'string', 'name');
+                
+                // Price data
+                assertProperty(token, 'price');
+                assertType(token.price, 'number', 'price');
+                assertProperty(token, 'price_change_24h');
+                assertType(token.price_change_24h, 'number', 'price_change_24h');
+                
+                // Balance and value
+                assertProperty(token, 'balance');
+                assertType(token.balance, 'number', 'balance');
+                assertProperty(token, 'balance_ui');
+                assertType(token.balance_ui, 'number', 'balance_ui');
+                assertProperty(token, 'value');
+                assertType(token.value, 'number', 'value');
+                
+                // Market data
+                assertProperty(token, 'liquidity_usd');
+                assertType(token.liquidity_usd, 'number', 'liquidity_usd');
+                assertProperty(token, 'market_cap');
+                assertType(token.market_cap, 'number', 'market_cap');
+                
+                // Monitoring and protection (flattened)
+                assertProperty(token, 'monitoring_active');
+                assertType(token.monitoring_active, 'boolean', 'monitoring_active');
+                assertProperty(token, 'protected');
+                assertType(token.protected, 'boolean', 'protected');
+                
+                // Risk data (flattened)
+                assertProperty(token, 'risk_score');
+                assertType(token.risk_score, 'number', 'risk_score');
+                assertProperty(token, 'risk_level');
+                assertType(token.risk_level, 'string', 'risk_level');
+                
+                // Flags
+                assertProperty(token, 'is_test_token');
+                assertType(token.is_test_token, 'boolean', 'is_test_token');
+                
+                mockFetchControl.restore();
+                logTest('All expected field names and types are present', true);
+                testsPassed++;
+            } catch (error) {
+                logTest('All expected field names and types are present', false, error.message);
+            }
+
+            // Test 3: Field mapping and calculations
+            testsTotal++;
+            try {
+                const mockFetchControl = mockFetch();
+                
+                const tokenMints = ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'So11111111111111111111111111111111111111112'];
+                const walletAddress = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM';
+                
+                const result = await TokenDataManager.getMultipleTokensData(tokenMints, walletAddress);
+                
+                const usdcToken = result.find(t => t.symbol === 'USDC');
+                const solToken = result.find(t => t.symbol === 'SOL');
+                
+                assert(usdcToken, 'USDC token should be found');
+                assert(solToken, 'SOL token should be found');
+                
+                // Test field mapping from nested structures
+                assert(usdcToken.monitoring_active === true, 'monitoring_active should be mapped from monitoring.active');
+                assert(usdcToken.protected === true, 'protected should be mapped from protection.isActive');
+                assert(usdcToken.risk_score === 1, 'risk_score should be mapped from risk.score');
+                assert(usdcToken.risk_level === 'LOW', 'risk_level should be mapped from risk.level');
+                
+                // Test calculated fields
+                const expectedUsdcBalanceUI = 1000000000 / Math.pow(10, 6); // 1000
+                const expectedSolBalanceUI = 2000000000 / Math.pow(10, 9); // 2
+                
+                assert(Math.abs(usdcToken.balance_ui - expectedUsdcBalanceUI) < 0.01, 'USDC balance_ui calculation should be correct');
+                assert(Math.abs(solToken.balance_ui - expectedSolBalanceUI) < 0.01, 'SOL balance_ui calculation should be correct');
+                
+                const expectedUsdcValue = expectedUsdcBalanceUI * 0.9999; // ~999.9
+                const expectedSolValue = expectedSolBalanceUI * 185.50; // ~371
+                
+                assert(Math.abs(usdcToken.value - expectedUsdcValue) < 0.1, 'USDC value calculation should be correct');
+                assert(Math.abs(solToken.value - expectedSolValue) < 0.1, 'SOL value calculation should be correct');
+                
+                mockFetchControl.restore();
+                logTest('Field mapping and calculations work correctly', true);
+                testsPassed++;
+            } catch (error) {
+                logTest('Field mapping and calculations work correctly', false, error.message);
+            }
+
+            // Test 4: Error handling
+            testsTotal++;
+            try {
+                // Test with empty array
+                const result1 = await TokenDataManager.getMultipleTokensData([], 'WALLET');
+                assert(Array.isArray(result1) && result1.length === 0, 'Empty token array should return empty result');
+                
+                // Test with null wallet
+                const result2 = await TokenDataManager.getMultipleTokensData(['TOKEN'], null);
+                assert(Array.isArray(result2) && result2.length === 0, 'Null wallet should return empty result');
+                
+                logTest('Error handling works correctly', true);
+                testsPassed++;
+            } catch (error) {
+                logTest('Error handling works correctly', false, error.message);
+            }
+
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-case ${testsPassed === testsTotal ? 'test-pass' : 'test-fail'}`;
+            summaryDiv.innerHTML = `<strong>Test Summary: ${testsPassed}/${testsTotal} tests passed</strong>`;
+            resultsDiv.appendChild(summaryDiv);
+        }
+    </script>
+</body>
+</html>

@@ -1,6 +1,10 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# Redirect .php extensions to clean URLs (external redirect)
+RewriteCond %{THE_REQUEST} \s/([^/]+)\.php[\s?] [NC]
+RewriteRule ^(.+)\.php$ /$1 [R=301,L]
+
 # Handle API routes
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
@@ -11,10 +15,20 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^assets/(.*)$ assets/$1 [L]
 
-# Handle PHP pages
+# Handle backend routes
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !\.php$
+RewriteRule ^backend/(.*)$ backend/$1 [L]
+
+# Handle component routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^components/(.*)$ components/$1 [L]
+
+# Handle PHP pages (internal rewrite)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^([^/]+)/?$ $1.php [L]
 
 # Redirect to index.php for root

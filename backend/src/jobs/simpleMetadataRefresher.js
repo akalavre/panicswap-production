@@ -37,8 +37,8 @@ async function fetchTokenMetadataFromHelius(tokenMint) {
         if (response.data.result) {
             const asset = response.data.result;
             return {
-                symbol: asset.content?.metadata?.symbol || 'UNKNOWN',
-                name: asset.content?.metadata?.name || 'Unknown Token',
+                symbol: asset.content?.metadata?.symbol || null,
+                name: asset.content?.metadata?.name || null,
                 decimals: asset.token_info?.decimals || 6,
                 image: asset.content?.links?.image || asset.content?.files?.[0]?.uri || null
             };
@@ -79,6 +79,41 @@ async function fetchTokenPriceFromJupiter(tokenMint) {
 }
 
 /**
+ * Helper function to preserve existing non-placeholder values
+ */
+function preserveExistingValue(newValue, existingValue, ...placeholders) {
+    // If new value is valid (not null/undefined/empty), use it
+    if (newValue !== null && newValue !== undefined && newValue !== '') {
+        return newValue;
+    }
+    
+    // If existing value exists and is not a placeholder, preserve it
+    if (existingValue && !isPlaceholderValue(existingValue, ...placeholders)) {
+        return existingValue;
+    }
+    
+    // Otherwise use the first placeholder as fallback
+    return placeholders[0] || null;
+}
+
+/**
+ * Helper function to check if a value is a placeholder
+ */
+function isPlaceholderValue(value, ...placeholders) {
+    if (!value) return true;
+    
+    const stringValue = String(value).toLowerCase();
+    return placeholders.some(placeholder => 
+        stringValue === placeholder.toLowerCase() ||
+        stringValue.includes('unknown') ||
+        stringValue.includes('test') ||
+        stringValue.includes('demo') ||
+        stringValue === 'null' ||
+        stringValue === 'undefined'
+    );
+}
+
+/**
  * Main refresh function
  */
 async function refreshPendingMetadata() {
@@ -116,6 +151,9 @@ async function refreshPendingMetadata() {
                 try {
                     console.log(`Processing ${token.mint}...`);
                     
+                    // First, fetch current row to preserve existing non-placeholder values
+                    const { data: existing } = await supabase.from('token_metadata').select('*').eq('mint', token.mint).single();
+                    
                     // Fetch metadata
                     const metadata = await fetchTokenMetadataFromHelius(token.mint);
                     const priceData = await fetchTokenPriceFromJupiter(token.mint);
@@ -124,7 +162,7 @@ async function refreshPendingMetadata() {
                         updated_at: new Date().toISOString()
                     };
                     
-                    // Check if we got valid metadata
+                    // Check if we got valid metadata from API
                     const hasValidMetadata = metadata && 
                                            metadata.symbol !== 'UNKNOWN' &&
                                            metadata.symbol !== 'TEST' &&
@@ -135,13 +173,26 @@ async function refreshPendingMetadata() {
                     
                     if (hasValidMetadata) {
                         updateData.metadata_status = 'complete';
-                        updateData.symbol = metadata.symbol;
-                        updateData.name = metadata.name;
-                        updateData.decimals = metadata.decimals;
-                        updateData.logo_uri = metadata.image || '/assets/images/token-placeholder.svg';
+                        updateData.symbol = preserveExistingValue(metadata.symbol, existing?.symbol, 'UNKNOWN');
+                        updateData.name = preserveExistingValue(metadata.name, existing?.name, 'Unknown Token');
+                        updateData.decimals = preserveExistingValue(metadata.decimals, existing?.decimals, 6);
+                        updateData.logo_uri = preserveExistingValue(metadata.image, existing?.logo_uri, '/assets/images/token-placeholder.svg');
                         successCount++;
                     } else {
+                        // Even if API failed, preserve existing good data
                         updateData.metadata_status = 'failed';
+                        if (existing?.symbol && !isPlaceholderValue(existing.symbol, 'UNKNOWN', 'Unknown Token')) {
+                            updateData.symbol = existing.symbol;
+                        }
+                        if (existing?.name && !isPlaceholderValue(existing.name, 'UNKNOWN', 'Unknown Token')) {
+                            updateData.name = existing.name;
+                        }
+                        if (existing?.decimals && existing.decimals !== 6) {
+                            updateData.decimals = existing.decimals;
+                        }
+                        if (existing?.logo_uri && !isPlaceholderValue(existing.logo_uri, '/assets/images/token-placeholder.svg')) {
+                            updateData.logo_uri = existing.logo_uri;
+                        }
                         failedCount++;
                     }
                     

@@ -55,20 +55,37 @@ try {
     
     // Update token_metadata table if we have symbol/name
     if (isset($input['symbol']) || isset($input['name'])) {
+        // Only update metadata if we have real values (not UNKNOWN)
+        $hasValidData = false;
         $metadataData = [
             'mint' => $tokenMint,
-            'symbol' => $input['symbol'] ?? 'UNKNOWN',
-            'name' => $input['name'] ?? 'Unknown Token',
             'is_active' => true,
             'platform' => 'pump.fun'
         ];
         
-        $metadataResponse = $supabase->from('token_metadata')
-            ->upsert($metadataData, ['onConflict' => 'mint'])
-            ->execute();
-            
-        if (isset($metadataResponse->error)) {
-            error_log("[update-token-metadata] Error updating token_metadata: " . json_encode($metadataResponse->error));
+        // Only set symbol if it's not empty and not UNKNOWN
+        if (!empty($input['symbol']) && $input['symbol'] !== 'UNKNOWN') {
+            $metadataData['symbol'] = $input['symbol'];
+            $hasValidData = true;
+        }
+        
+        // Only set name if it's not empty and not Unknown/UNKNOWN
+        if (!empty($input['name']) && $input['name'] !== 'Unknown Token' && $input['name'] !== 'UNKNOWN') {
+            $metadataData['name'] = $input['name'];
+            $hasValidData = true;
+        }
+        
+        // Only update if we have valid data
+        if (!$hasValidData) {
+            error_log("[update-token-metadata] Skipping metadata update - no valid symbol/name provided");
+        } else {
+            $metadataResponse = $supabase->from('token_metadata')
+                ->upsert($metadataData, ['onConflict' => 'mint'])
+                ->execute();
+                
+            if (isset($metadataResponse->error)) {
+                error_log("[update-token-metadata] Error updating token_metadata: " . json_encode($metadataResponse->error));
+            }
         }
     }
     

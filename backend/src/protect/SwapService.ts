@@ -6,6 +6,7 @@ import { transactionCache } from '../services/TransactionCache';
 import { prioritySender } from '../services/PrioritySender';
 import { keyManagementService } from '../services/KeyManagementService';
 import { createAlertingService } from '../services/AlertingService';
+import { canExecuteSwaps } from '../utils/subscriptionUtils';
 
 export interface SwapExecutionRequest {
   walletAddress: string;
@@ -367,6 +368,27 @@ export class SwapService {
     walletAddress: string
   ): Promise<{ success: boolean; signature?: string; error?: string }> {
     try {
+      // Check if user has full protection mode (can execute swaps)
+      const canExecute = await canExecuteSwaps(walletAddress);
+      if (!canExecute) {
+        console.log(`[SwapService] Watch-only mode for wallet ${walletAddress} - cannot execute swap`);
+        
+        // Send alert instead of executing swap
+        await this.alertingService.sendAlert({
+          type: 'rugpull_detected_watch_only',
+          severity: 'high',
+          wallet_address: walletAddress,
+          token_mint: tokenMint,
+          message: 'Rugpull detected but auto-execution disabled for watch-only account',
+          metadata: { protection_mode: 'watch-only' }
+        });
+        
+        return {
+          success: false,
+          error: 'Watch-only mode - manual intervention required'
+        };
+      }
+      
       // Get wallet balance and token metadata
       const [walletTokenResult, tokenMetadataResult] = await Promise.all([
         supabase
@@ -615,9 +637,9 @@ export class SwapService {
           console.log(`[SwapService] Transaction is pre-signed, sending directly`);
           
           try {
-            // Send pre-signed transaction directly
+            // Send pre-signed transaction directly (convert from base64)
             const signature = await this.connection.sendRawTransaction(
-              cached.transaction.serialize(),
+              Buffer.from(cached.transaction, 'base64'),
               {
                 skipPreflight: true,
                 maxRetries: 3,
@@ -674,12 +696,16 @@ export class SwapService {
           };
         }
         
+        // Deserialize transaction from base64
+        const txBuffer = Buffer.from(cached.transaction, 'base64');
+        const transaction = VersionedTransaction.deserialize(txBuffer);
+        
         // Sign transaction
-        cached.transaction.sign([keypair]);
+        transaction.sign([keypair]);
         
         // Send via priority sender for MEV protection
         const result = await prioritySender.sendEmergencyTransaction(
-          cached.transaction,
+          transaction,
           keypair,
           {
             jitoTipAmount: 100000, // 0.0001 SOL

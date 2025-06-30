@@ -620,6 +620,37 @@ export class PriceDiscoveryService {
         const price = parseFloat(bestPair.priceUsd || '0');
         if (price > 0) {
           console.log(`DexScreener price for ${mint}: $${price}`);
+          
+          // Also save token metadata if available
+          let tokenInfo = null;
+          if (bestPair.baseToken?.address === mint) {
+            tokenInfo = bestPair.baseToken;
+          } else if (bestPair.quoteToken?.address === mint) {
+            tokenInfo = bestPair.quoteToken;
+          }
+          
+          if (tokenInfo && tokenInfo.name && tokenInfo.name !== 'Unknown Token') {
+            console.log(`DexScreener also has metadata for ${mint}: ${tokenInfo.name}`);
+            // Update token metadata in database
+            supabase
+              .from('token_metadata')
+              .upsert({
+                mint: mint,
+                symbol: tokenInfo.symbol || 'UNKNOWN',
+                name: tokenInfo.name || 'Unknown Token',
+                platform: 'dexscreener',
+                is_active: true,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'mint' })
+              .then(result => {
+                if (result.error) {
+                  console.error('Error saving DexScreener metadata:', result.error);
+                } else {
+                  console.log('Saved DexScreener metadata to database');
+                }
+              });
+          }
+          
           return price;
         }
       }
@@ -879,7 +910,9 @@ export class PriceDiscoveryService {
           // - Bonding curve starts with 30 SOL virtual liquidity
           // - At 100% progress, there's 85 SOL in the curve
           // - Current SOL = 30 + (progress * 55)
-          const solInCurve = 30 + (bondingProgress * 55);
+          // NOTE: bondingProgress is in percentage format (e.g., 14.32), not decimal (0.1432)
+          const normalizedProgress = bondingProgress > 1 ? bondingProgress / 100 : bondingProgress;
+          const solInCurve = 30 + (normalizedProgress * 55);
           
           // Convert SOL to USD (approximate)
           const solPriceUSD = 240; // Current approximate SOL price

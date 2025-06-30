@@ -6,7 +6,6 @@ import { poolMonitoringService } from './PoolMonitoringService';
 import { ruggedTokenDetector } from './RuggedTokenDetector';
 import { mlRiskIntegrationService } from './MLRiskIntegrationService';
 import config from '../config';
-import { cacheKeys, CACHE_TTL, setCached, getCached } from '../utils/upstashClient';
 
 interface MonitoringStats {
     token_mint: string;
@@ -24,6 +23,11 @@ interface MonitoringStats {
     flash_rug_alert: boolean;
     rapid_drain_alert: boolean;
     slow_bleed_alert: boolean;
+    creator_selling_alert: boolean;
+    creator_balance_percent: number;
+    creator_change_1m: number;
+    creator_change_5m: number;
+    creator_change_30m: number;
     active_patterns: any[];
     highest_risk_pattern: string | null;
     pattern_confidence: number;
@@ -151,6 +155,11 @@ export class MonitoringStatsService {
                 flash_rug_alert: velocityData?.alerts?.flashRug || false,
                 rapid_drain_alert: velocityData?.alerts?.rapidDrain || false,
                 slow_bleed_alert: velocityData?.alerts?.slowBleed || false,
+                creator_selling_alert: velocityData?.alerts?.creatorSelling || false,
+                creator_balance_percent: velocityData?.current?.creatorBalancePercent || 0,
+                creator_change_1m: velocityData?.velocities?.creator1m || 0,
+                creator_change_5m: velocityData?.velocities?.creator5m || 0,
+                creator_change_30m: velocityData?.velocities?.creator30m || 0,
                 active_patterns: patternAnalysis?.patterns || [],
                 highest_risk_pattern: this.getHighestRiskPattern(patternAnalysis),
                 pattern_confidence: this.getHighestConfidence(patternAnalysis),
@@ -175,12 +184,7 @@ export class MonitoringStatsService {
                     onConflict: 'token_mint,wallet_address'
                 });
             
-            // Cache in Redis for fast access
-            await setCached(
-                cacheKeys.monitoringStats(tokenMint, walletAddress), 
-                stats, 
-                CACHE_TTL.MONITORING_STATS
-            );
+            // Caching removed
 
             // Log critical alerts
             if (stats.flash_rug_alert || stats.rapid_drain_alert) {

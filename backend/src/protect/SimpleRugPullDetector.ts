@@ -8,6 +8,7 @@ import { wsClient } from '../services/SolanaWebsocketClient';
 import { transactionCache } from '../services/TransactionCache';
 import { prioritySender } from '../services/PrioritySender';
 import { createAlertingService } from '../services/AlertingService';
+import { canExecuteSwaps } from '../utils/subscriptionUtils';
 
 export interface RugPullAlert {
   tokenMint: string;
@@ -236,8 +237,8 @@ Time: ${alert.detected_at}
           // Send pre-computed transaction
           console.log(`[SimpleRugPullDetector] Sending cached tx for ${protection.wallet_address}`);
           
-          // The cached.transaction is already a VersionedTransaction object
-          const txBuffer = cached.transaction.serialize();
+          // The cached.transaction is a base64 string, need to convert back
+          const txBuffer = Buffer.from(cached.transaction, 'base64');
           
           // Send using connection directly for pre-signed transactions
           const signature = await this.connection.sendRawTransaction(txBuffer, {
@@ -323,7 +324,10 @@ Time: ${alert.detected_at}
       for (const protection of protections) {
         console.log(`[SimpleRugPullDetector] Processing wallet ${protection.wallet_address} (${protection.protection_level})`);
         
-        if (protection.protection_level === 'automatic' || !protection.protection_level) {
+        // Check if user has full protection mode
+        const userCanExecuteSwaps = await canExecuteSwaps(protection.wallet_address);
+        
+        if (userCanExecuteSwaps) {
           // Default to automatic if not specified
           console.log(`[SimpleRugPullDetector] Triggering automatic protection for wallet ${protection.wallet_address}`);
           await this.executeProtection(
@@ -416,8 +420,7 @@ Time: ${alert.detected_at}
       .from('protected_tokens')
       .select('wallet_address')
       .eq('token_mint', tokenMint)
-      .eq('is_active', true)
-      .eq('protection_level', 'automatic');
+      .eq('is_active', true);
 
     if (!protections || protections.length === 0) {
       console.log('No automatic protections to execute');
@@ -426,11 +429,16 @@ Time: ${alert.detected_at}
 
     // Execute sell for each wallet
     for (const protection of protections) {
-      await this.executeProtection(
-        tokenMint,
-        protection.wallet_address,
-        reason
-      );
+      const canExecute = await canExecuteSwaps(protection.wallet_address);
+      if (canExecute) {
+        await this.executeProtection(
+          tokenMint,
+          protection.wallet_address,
+          reason
+        );
+      } else {
+        console.log(`Cannot execute swap for watch-only wallet ${protection.wallet_address}`);
+      }
     }
   }
 

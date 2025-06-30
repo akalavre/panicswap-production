@@ -51,22 +51,22 @@ $plans = [
     'pro' => [
         'name' => 'Pro Plan',
         'price_cents' => 7900, // $79.00
-        'description' => 'Pro subscription - Up to 50 tokens, < 2s response'
+        'description' => 'Pro subscription - 5 tokens, < 2s response'
     ],
     'degen' => [
         'name' => 'Degen Mode Plan',
         'price_cents' => 14900, // $149.00
-        'description' => 'Degen Mode - Up to 100 tokens, < 1s response, Pump.fun'
+        'description' => 'Degen Mode - 20 tokens, < 1s response, Pump.fun'
     ],
     'degen-mode' => [ // Keep for backwards compatibility
         'name' => 'Degen Mode Plan',
         'price_cents' => 14900, // $149.00
-        'description' => 'Degen Mode - Up to 100 tokens, < 1s response, Pump.fun'
+        'description' => 'Degen Mode - 20 tokens, < 1s response, Pump.fun'
     ],
     'enterprise' => [
         'name' => 'Enterprise Plan',
         'price_cents' => 39900, // $399.00
-        'description' => 'Enterprise - Unlimited tokens, all DEXs, dedicated support'
+        'description' => 'Enterprise - 50 tokens, all DEXs, dedicated support'
     ]
 ];
 

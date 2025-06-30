@@ -32,6 +32,46 @@ if (!isset($data['wallet_address'])) {
     exit;
 }
 
+// Check if user has full protection mode (can execute swaps)
+require_once __DIR__ . '/../supabase-config.php';
+$supabase = new SupabaseClient(true);
+
+// Get user subscription to check protection mode
+try {
+    $users = $supabase->query('users', [
+        'wallet_address' => 'eq.' . $data['wallet_address']
+    ]);
+    
+    $hasFullProtection = false;
+    if ($users && count($users) > 0) {
+        $subscriptions = $supabase->query('subscriptions', [
+            'user_id' => 'eq.' . $users[0]['id'],
+            'status' => 'eq.active'
+        ]);
+        
+        if ($subscriptions && count($subscriptions) > 0) {
+            $subscription = $subscriptions[0];
+            // Check explicit protection_mode or fall back to plan type
+            $hasFullProtection = 
+                (isset($subscription['protection_mode']) && $subscription['protection_mode'] === 'full') ||
+                (!isset($subscription['protection_mode']) && in_array(strtolower($subscription['plan']), ['pro', 'enterprise', 'degen-mode']));
+        }
+    }
+    
+    if (!$hasFullProtection) {
+        http_response_code(403);
+        echo json_encode([
+            'error' => 'Full protection mode required',
+            'message' => 'Auto-sell delegation is only available for users with full protection mode enabled',
+            'protection_mode' => 'watch-only'
+        ]);
+        exit;
+    }
+} catch (Exception $e) {
+    error_log('Error checking protection mode: ' . $e->getMessage());
+    // Default to allowing for backward compatibility
+}
+
 $walletAddress = $data['wallet_address'];
 
 // Validate wallet address format

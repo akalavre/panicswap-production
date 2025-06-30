@@ -20,7 +20,6 @@ import { poolMonitoringService } from './PoolMonitoringService';
 import { moralisService } from './MoralisService';
 import { pumpFunService } from './PumpFunService';
 import { rugCheckPollingService } from './RugCheckPollingService';
-import { getRedisHealth } from '../utils/upstashClient';
 
 export class ExpressApiService {
   private app: express.Application;
@@ -81,8 +80,6 @@ export class ExpressApiService {
 
     // Enhanced health check
     this.app.get('/api/enhanced/health', async (req: Request, res: Response) => {
-      const redisHealth = await getRedisHealth();
-      
       res.json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(), 
@@ -90,10 +87,9 @@ export class ExpressApiService {
         protectionActive: true,
         monitoringActive: true,
         redis: {
-          enabled: redisHealth.enabled,
-          connected: redisHealth.connected,
-          status: redisHealth.status,
-          fallbackCount: redisHealth.metrics.fallbackCount
+          enabled: false,
+          connected: false,
+          status: 'disabled'
         }
       });
     });
@@ -948,18 +944,33 @@ export class ExpressApiService {
         }
 
         // 4. Add to protected_tokens with automatic protection enabled
+        console.log('[Debug] Inserting into protected_tokens:', {
+          token_mint: tokenMint,
+          wallet_address: walletAddress,
+          is_active: true,
+          monitoring_active: true,
+          price_threshold: 15,
+          liquidity_threshold: 30,
+          dev_wallet_monitoring: true,
+          gas_boost: 1
+        });
+
         const { data: protectedData, error: protectedError } = await supabase
           .from('protected_tokens')
           .upsert({
             token_mint: tokenMint,
             wallet_address: walletAddress,
+            token_symbol: tokenMetadata.symbol || 'UNKNOWN',
+            token_name: tokenMetadata.name || 'Unknown Token',
             is_active: true,
+            monitoring_enabled: true,
             monitoring_active: true,
             price_threshold: 15, // Default 15% drop threshold
             liquidity_threshold: 30, // Default 30% liquidity drop
             dev_wallet_monitoring: true,
             gas_boost: 1,
-            auto_protection_enabled: true, // Enable automatic protection
+            swap_to_sol: true,
+            max_slippage_bps: 500,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }, {
@@ -1026,6 +1037,162 @@ export class ExpressApiService {
       } catch (error: any) {
         console.error('[Test] Error adding test token:', error);
         res.status(500).json({ error: error.message || 'Failed to add test token' });
+      }
+    });
+
+    // Wallet connection endpoint - New API with backward compatibility
+    this.app.post('/api/connect-wallet', async (req: Request, res: Response) => {
+      try {
+        const body = req.body;
+        console.log('[ConnectWallet] Request received:', { 
+          hasWalletAddress: !!body.wallet_address, 
+          hasPrivateKey: !!body.private_key,
+          mode: body.mode,
+          walletType: body.wallet_type // legacy field
+        });
+
+        // Validate required fields
+        if (!body.wallet_address) {
+          return res.status(400).json({ 
+            error: 'wallet_address is required' 
+          });
+        }
+
+        let protectionMode: 'watch' | 'full';
+        let privateKey: string | null = null;
+
+        // Handle new payload format
+        if (body.mode !== undefined) {
+          // New API format: { wallet_address, private_key, mode }
+          protectionMode = body.mode;
+          
+          if (protectionMode !== 'watch' && protectionMode !== 'full') {
+            return res.status(400).json({ 
+              error: 'mode must be either "watch" or "full"' 
+            });
+          }
+
+          if (protectionMode === 'full') {
+            if (!body.private_key) {
+              return res.status(400).json({ 
+                error: 'private_key is required when mode is "full"' 
+              });
+            }
+            privateKey = body.private_key;
+          }
+        } 
+        // Handle legacy payload format for backward compatibility
+        else if (body.wallet_type !== undefined) {
+          // Legacy API format: { wallet_address, private_key, wallet_type }
+          console.log('[ConnectWallet] Processing legacy wallet_type format');
+          
+          if (body.wallet_type === 'hot') {
+            protectionMode = 'full';
+            if (!body.private_key) {
+              return res.status(400).json({ 
+                error: 'private_key is required for hot wallet type' 
+              });
+            }
+            privateKey = body.private_key;
+          } else {
+            protectionMode = 'watch';
+          }
+        } 
+        // Default to watch mode if neither mode nor wallet_type is specified
+        else {
+          protectionMode = 'watch';
+        }
+
+        const walletAddress = body.wallet_address;
+
+        // Import the key management service
+        const { keyManagementService } = await import('./KeyManagementService');
+
+        // Validate private key format if provided
+        if (privateKey && !keyManagementService.validatePrivateKey(privateKey)) {
+          return res.status(400).json({ 
+            error: 'Invalid private key format' 
+          });
+        }
+
+        // Create or verify keypair for full protection mode
+        let keypair = null;
+        if (protectionMode === 'full' && privateKey) {
+          keypair = keyManagementService.validateAndCreateKeypair(privateKey);
+          if (!keypair) {
+            return res.status(400).json({ 
+              error: 'Failed to create valid keypair from private key' 
+            });
+          }
+
+          // Verify the wallet address matches the private key
+          const derivedAddress = keypair.publicKey.toBase58();
+          if (derivedAddress !== walletAddress) {
+            return res.status(400).json({ 
+              error: 'Private key does not match the provided wallet address' 
+            });
+          }
+        }
+
+        // Store encrypted private key only for full protection mode
+        if (protectionMode === 'full' && privateKey) {
+          const keyStored = await keyManagementService.storeEncryptedKey(walletAddress, privateKey);
+          if (!keyStored) {
+            return res.status(500).json({ 
+              error: 'Failed to securely store private key' 
+            });
+          }
+          console.log(`[ConnectWallet] Encrypted private key stored for ${walletAddress}`);
+        }
+
+        // Store wallet registration information
+        const { error: walletError } = await supabase
+          .from('users')
+          .upsert({
+            wallet_address: walletAddress,
+            protection_mode: protectionMode,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'wallet_address'
+          });
+
+        if (walletError) {
+          console.error('[ConnectWallet] Error storing wallet info:', walletError);
+          return res.status(500).json({ 
+            error: 'Failed to register wallet' 
+          });
+        }
+
+        // Initialize wallet tokens sync for better UX
+        if (this.walletTokenService) {
+          try {
+            await this.walletTokenService.syncWallet(walletAddress);
+            console.log(`[ConnectWallet] Initial wallet sync completed for ${walletAddress}`);
+          } catch (syncError) {
+            console.error('[ConnectWallet] Warning: Initial wallet sync failed:', syncError);
+            // Don't fail the connection if sync fails
+          }
+        }
+
+        // Return success response with protection_mode
+        const response = {
+          success: true,
+          wallet_address: walletAddress,
+          protection_mode: protectionMode,
+          message: protectionMode === 'full' 
+            ? 'Wallet connected with full protection (private key stored securely)'
+            : 'Wallet connected in watch-only mode',
+          timestamp: new Date().toISOString()
+        };
+
+        console.log(`[ConnectWallet] Successfully connected wallet ${walletAddress} with ${protectionMode} protection`);
+        res.json(response);
+      } catch (error: any) {
+        console.error('[ConnectWallet] Error:', error);
+        res.status(500).json({ 
+          error: error.message || 'Failed to connect wallet' 
+        });
       }
     });
 
@@ -1470,8 +1637,8 @@ export class ExpressApiService {
     this.app.use('/api/monitoring', monitoringRoutes);
     
     // Cached monitoring routes (includes monitoring-status endpoint)
-    const cachedMonitoringRoutes = require('../routes/cachedMonitoringRoutes').default;
-    this.app.use('/api', cachedMonitoringRoutes);
+    const directMonitoringRoutes = require('../routes/directMonitoringRoutes').default;
+    this.app.use('/api', directMonitoringRoutes);
     
     // Monitoring debug endpoint
     this.app.get('/api/monitoring/debug/:tokenMint', async (req: Request, res: Response) => {
@@ -1700,7 +1867,7 @@ export class ExpressApiService {
       });
       
       this.server.listen(this.port, () => {
-        console.log(`Express API server with WebSocket support running on port ${this.port}`);
+        console.log(`Express API server running on port ${this.port}`);
         resolve();
       });
     });

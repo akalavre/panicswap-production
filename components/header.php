@@ -7,7 +7,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
         <div class="flex items-center justify-between h-20">
             <!-- Logo -->
             <div class="flex items-center space-x-4">
-                <a href="index.php" class="flex items-center space-x-3 group">
+                <a href="/" class="flex items-center space-x-3 group">
                     <div class="relative">
                         <div class="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg blur-lg opacity-50 group-hover:opacity-75 transition-opacity"></div>
                         <div class="relative bg-gradient-to-br from-orange-500 to-red-600 p-2 rounded-lg">
@@ -24,16 +24,16 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
 
             <!-- Desktop Navigation -->
             <nav class="hidden md:flex items-center space-x-1">
-                <a href="index.php" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'index' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+                <a href="/" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'index' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                     Home
                 </a>
-                <a href="dashboard.php" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+                <a href="/dashboard" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                     Dashboard
                 </a>
                 <a href="#pricing" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-300 hover:text-white hover:bg-white/5">
                     Pricing
                 </a>
-                <a href="how-it-works.php" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'how-it-works' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+                <a href="/how-it-works" class="nav-link px-4 py-2 rounded-lg text-sm font-medium transition-all <?php echo $current_page === 'how-it-works' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                     How it Works
                 </a>
             </nav>
@@ -60,16 +60,16 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
     <!-- Mobile Menu -->
     <div id="mobile-menu" class="md:hidden hidden">
         <div class="px-4 pt-2 pb-4 space-y-1 bg-black/90 backdrop-blur-xl border-b border-white/5">
-            <a href="index.php" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'index' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+            <a href="/" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'index' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                 Home
             </a>
-            <a href="dashboard.php" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+            <a href="/dashboard" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'dashboard' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                 Dashboard
             </a>
             <a href="#pricing" class="block px-4 py-3 rounded-lg text-base font-medium transition-all text-gray-300 hover:text-white hover:bg-white/5">
                 Pricing
             </a>
-            <a href="how-it-works.php" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'how-it-works' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
+            <a href="/how-it-works" class="block px-4 py-3 rounded-lg text-base font-medium transition-all <?php echo $current_page === 'how-it-works' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'; ?>">
                 How it Works
             </a>
             <div class="pt-4 px-4">

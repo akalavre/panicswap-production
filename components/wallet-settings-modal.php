@@ -120,6 +120,69 @@
                     </div>
                 </div>
                 
+                <!-- Protection Mode Section -->
+                <div class="bg-gray-800/50 rounded-xl p-6 mb-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h4 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+                                Protection Mode
+                                <span id="current-mode-badge" class="text-xs bg-gray-700 text-gray-400 px-2 py-1 rounded-full">Loading...</span>
+                            </h4>
+                            <p class="text-sm text-gray-400">Manage your wallet protection level</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Watch Mode Status -->
+                    <div id="watch-mode-status" class="hidden">
+                        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+                            <div class="flex items-center gap-3 mb-2">
+                                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                                <span class="font-medium text-blue-400">Watch Mode Active</span>
+                            </div>
+                            <p class="text-sm text-blue-300">Your wallet is in watch-only mode. Upgrade to full protection for automatic emergency swaps.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Full Protection Status -->
+                    <div id="full-protection-status" class="hidden">
+                        <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                            <div class="flex items-center gap-3 mb-2">
+                                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                <span class="font-medium text-green-400">Full Protection Active</span>
+                            </div>
+                            <p class="text-sm text-green-300">Your wallet has full protection with automatic emergency swaps enabled.</p>
+                        </div>
+                        
+                        <!-- Downgrade Option -->
+                        <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h5 class="font-medium text-orange-400 mb-1">Downgrade to Watch Mode</h5>
+                                    <p class="text-sm text-orange-300 mb-3">
+                                        Remove private key storage and disable automatic swaps. You can upgrade back to full protection anytime.
+                                    </p>
+                                    <div class="text-xs text-orange-400 mb-3">
+                                        <strong>Note:</strong> This will disable automatic emergency swaps. You'll need to manually approve any protection actions.
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="downgrade-to-watch-btn" 
+                                    class="w-full bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                                Downgrade to Watch Mode
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Additional Settings -->
                 <div class="bg-gray-800/50 rounded-xl p-6">
                     <h4 class="text-lg font-semibold text-white mb-4">Protection Settings</h4>
@@ -261,12 +324,19 @@
 </div>
 
 <script>
-// Modal functions
-function openWalletSettingsModal() {
+// Modal functions - make them global
+window.openWalletSettingsModal = function() {
     const modal = document.getElementById('wallet-settings-modal');
+    if (!modal) {
+        console.error('Wallet settings modal not found');
+        return;
+    }
     modal.classList.remove('hidden');
     setTimeout(() => {
-        modal.querySelector('.animate-scale-in').classList.add('scale-100');
+        const scaleElement = modal.querySelector('.animate-scale-in');
+        if (scaleElement) {
+            scaleElement.classList.add('scale-100');
+        }
     }, 10);
     
     // Load hidden tokens when modal opens
@@ -338,19 +408,33 @@ function unhideToken(tokenMint, tokenSymbol) {
     }
 }
 
-function closeWalletSettingsModal() {
+window.closeWalletSettingsModal = function() {
     const modal = document.getElementById('wallet-settings-modal');
-    modal.querySelector('.animate-scale-in').classList.remove('scale-100');
+    if (!modal) {
+        console.error('Wallet settings modal not found');
+        return;
+    }
+    const scaleElement = modal.querySelector('.animate-scale-in');
+    if (scaleElement) {
+        scaleElement.classList.remove('scale-100');
+    }
     setTimeout(() => {
         modal.classList.add('hidden');
     }, 300);
 }
 
-function openHotWalletWarningModal() {
+window.openHotWalletWarningModal = function() {
     const modal = document.getElementById('hot-wallet-warning-modal');
+    if (!modal) {
+        console.error('Hot wallet warning modal not found');
+        return;
+    }
     modal.classList.remove('hidden');
     setTimeout(() => {
-        modal.querySelector('.animate-scale-in').classList.add('scale-100');
+        const scaleElement = modal.querySelector('.animate-scale-in');
+        if (scaleElement) {
+            scaleElement.classList.add('scale-100');
+        }
     }, 10);
 }
 
@@ -362,14 +446,159 @@ function closeHotWalletWarningModal() {
     }, 300);
 }
 
+// Update protection mode display
+function updateProtectionModeDisplay() {
+    const currentState = window.walletState ? window.walletState.getState() : null;
+    const watchStatus = document.getElementById('watch-mode-status');
+    const fullStatus = document.getElementById('full-protection-status');
+    const modeBadge = document.getElementById('current-mode-badge');
+    
+    if (!currentState || currentState.status !== 'connected') {
+        // Not connected
+        watchStatus.classList.add('hidden');
+        fullStatus.classList.add('hidden');
+        modeBadge.textContent = 'Not Connected';
+        modeBadge.className = 'text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full';
+        return;
+    }
+    
+    if (currentState.mode === 'watch') {
+        watchStatus.classList.remove('hidden');
+        fullStatus.classList.add('hidden');
+        modeBadge.textContent = 'Watch Mode';
+        modeBadge.className = 'text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full';
+    } else if (currentState.mode === 'full') {
+        watchStatus.classList.add('hidden');
+        fullStatus.classList.remove('hidden');
+        modeBadge.textContent = 'Full Protection';
+        modeBadge.className = 'text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full';
+    }
+}
+
+// Handle downgrade to watch mode
+async function handleDowngradeToWatch() {
+    const btn = document.getElementById('downgrade-to-watch-btn');
+    const originalContent = btn.innerHTML;
+    
+    // Confirm action
+    if (!confirm('Are you sure you want to downgrade to watch mode? This will disable automatic emergency swaps and remove your stored private key.')) {
+        return;
+    }
+    
+    try {
+        // Show loading state
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Switching...</span>
+        `;
+        
+        // Check if walletState is available
+        if (!window.walletState) {
+            throw new Error('Wallet state manager not available');
+        }
+        
+        // Use the new switchToWatch method
+        await window.walletState.switchToWatch();
+        
+        // Update the display
+        updateProtectionModeDisplay();
+        
+        // Show success notification
+        showAutoSellNotification('Successfully downgraded to watch mode. Automatic emergency swaps are now disabled.', 'success');
+        
+        // Update localStorage for backwards compatibility
+        localStorage.setItem('protectionMode', 'watch');
+        localStorage.removeItem('fullProtectionEnabled');
+        
+        // Trigger banner refresh if available
+        if (window.bannerController) {
+            setTimeout(() => {
+                window.bannerController.refresh();
+            }, 1000);
+        }
+        
+    } catch (error) {
+        console.error('Failed to downgrade to watch mode:', error);
+        showAutoSellNotification('Failed to downgrade to watch mode: ' + error.message, 'error');
+    } finally {
+        // Restore button
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
+}
+
 // Initialize auto-sell module when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     if (window.autoSell) {
         window.autoSell.init();
     }
+    
+    // Set up protection mode display update
+    updateProtectionModeDisplay();
+    
+    // Listen for wallet state changes
+    if (window.walletState) {
+        window.walletState.on('change', updateProtectionModeDisplay);
+        window.walletState.on('modeSwitched', updateProtectionModeDisplay);
+    }
+    
+    // Add event listener for downgrade button
+    const downgradeBtn = document.getElementById('downgrade-to-watch-btn');
+    if (downgradeBtn) {
+        downgradeBtn.addEventListener('click', handleDowngradeToWatch);
+    }
 });
 
-// Close modals on backdrop click
-document.getElementById('wallet-settings-backdrop')?.addEventListener('click', closeWalletSettingsModal);
-document.getElementById('hot-wallet-warning-backdrop')?.addEventListener('click', closeHotWalletWarningModal);
+// Close modals with proper backdrop click handling
+const walletSettingsBackdrop = document.getElementById('wallet-settings-backdrop');
+const walletSettingsContent = document.querySelector('#wallet-settings-modal .animate-scale-in');
+const hotWalletBackdrop = document.getElementById('hot-wallet-warning-backdrop');
+const hotWalletContent = document.querySelector('#hot-wallet-warning-modal .animate-scale-in');
+
+// Wallet Settings Modal - backdrop click to cancel (only if clicked directly on backdrop)
+if (walletSettingsBackdrop) {
+    walletSettingsBackdrop.addEventListener('click', (e) => {
+        if (e.target === walletSettingsBackdrop) {
+            closeWalletSettingsModal();
+        }
+    });
+}
+
+// Stop propagation on wallet settings modal content to avoid accidental cancel
+if (walletSettingsContent) {
+    walletSettingsContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+// Hot Wallet Warning Modal - backdrop click to cancel (only if clicked directly on backdrop)
+if (hotWalletBackdrop) {
+    hotWalletBackdrop.addEventListener('click', (e) => {
+        if (e.target === hotWalletBackdrop) {
+            closeHotWalletWarningModal();
+        }
+    });
+}
+
+// Stop propagation on hot wallet modal content to avoid accidental cancel
+if (hotWalletContent) {
+    hotWalletContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+// ESC key to close modals
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (!document.getElementById('wallet-settings-modal').classList.contains('hidden')) {
+            closeWalletSettingsModal();
+        } else if (!document.getElementById('hot-wallet-warning-modal').classList.contains('hidden')) {
+            closeHotWalletWarningModal();
+        }
+    }
+});
 </script>

@@ -5,7 +5,7 @@ class MonitoringTooltip {
         this.currentTarget = null;
         this.updateInterval = null;
         this.isVisible = false;
-        this.cache = new Map();
+        // No cache - use unified service
         this.init();
     }
 
@@ -38,15 +38,34 @@ class MonitoringTooltip {
     }
 
     handleMouseOver(e) {
-        // Look for both monitoring-mint and token-mint attributes
-        const target = e.target.closest('[data-monitoring-mint], .real-time-risk-badge[data-token-mint]');
+        // Look for monitoring-mint, token-mint, real-time-risk-badge, or unified-badge
+        const target = e.target.closest('[data-monitoring-mint], [data-token-mint], .real-time-risk-badge, .unified-badge');
         if (!target) return;
 
-        // Check if monitoring is enabled from the basic tooltip data
+        // Check if this is a risk badge element (either old or new style)
+        const isRiskBadge = target.classList.contains('real-time-risk-badge') || 
+                           target.classList.contains('unified-badge');
+        const tokenMint = target.dataset.monitoringMint || target.dataset.tokenMint;
+        const walletAddress = target.dataset.walletAddress || localStorage.getItem('walletAddress');
+        
+        if (!tokenMint || !walletAddress) return;
+        
+        // For risk badges, always intercept to check monitoring status via API
+        // This prevents the "not monitoring" tooltip from showing initially
+        if (isRiskBadge) {
+            // Stop event propagation to prevent basic tooltip
+            e.stopPropagation();
+            
+            this.currentTarget = target;
+            this.showTooltip(target, tokenMint, walletAddress);
+            return;
+        }
+        
+        // For non-risk-badge elements, check tooltip data as before
         const tooltipData = target.dataset.tooltip ? JSON.parse(target.dataset.tooltip) : null;
         
         console.log('[MonitoringTooltip] Mouseover:', {
-            tokenMint: target.dataset.tokenMint,
+            tokenMint: tokenMint,
             tooltipData: tooltipData,
             monitoring: tooltipData?.monitoring
         });
@@ -60,16 +79,11 @@ class MonitoringTooltip {
         e.stopPropagation();
 
         this.currentTarget = target;
-        const tokenMint = target.dataset.monitoringMint || target.dataset.tokenMint;
-        const walletAddress = target.dataset.walletAddress || localStorage.getItem('walletAddress');
-
-        if (!tokenMint || !walletAddress) return;
-
         this.showTooltip(target, tokenMint, walletAddress);
     }
 
     handleMouseOut(e) {
-        const target = e.target.closest('[data-monitoring-mint], .real-time-risk-badge[data-token-mint]');
+        const target = e.target.closest('[data-monitoring-mint], [data-token-mint], .real-time-risk-badge, .unified-badge');
         if (!target || target !== this.currentTarget) return;
 
         // Check if this was a monitored token
@@ -131,20 +145,54 @@ class MonitoringTooltip {
 
     async updateMonitoringData(tokenMint, walletAddress) {
         try {
-            // Get the base path from the current location
-            const basePath = window.location.pathname.includes('/PanicSwap-php') ? '/PanicSwap-php' : '';
-            const response = await fetch(`${basePath}/api/monitoring-status.php/${tokenMint}?wallet=${walletAddress}`);
+            // Use UnifiedTokenDataService - no caching
+            const data = await window.getTokenData(tokenMint, walletAddress);
             
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!data) {
+                throw new Error('No data returned');
             }
-            
-            const data = await response.json();
             
             if (!this.isVisible) return;
             
-            this.cache.set(tokenMint, data);
-            this.tooltip.innerHTML = this.renderMonitoringData(data);
+            // Convert unified data to monitoring format
+            const monitoringData = {
+                monitoring: {
+                    active: data.monitoringActive,
+                    mempoolEnabled: true,
+                    riskThreshold: 'HIGH',
+                    activeMonitors: data.activeMonitors || 0
+                },
+                liquidity: {
+                    current: data.liquidity,
+                    change24h: data.liquidityChange24h,
+                    change5m: data.liquidityChange5m,
+                    change1m: data.liquidityChange1m,
+                    change30m: data.liquidityChange30m || 0
+                },
+                price: {
+                    current: data.price,
+                    change24h: data.priceChange24h,
+                    change5m: data.priceChange5m,
+                    change1m: data.priceChange1m
+                },
+                alerts: data.patterns?.active?.filter?.(p => p && p.severity === 'high') || [],
+                patterns: data.patterns || { active: [], highestRisk: null, confidence: 0, timeToRug: null },
+                stats: {
+                    checkFrequency: '30s',
+                    lastCheck: new Date().toISOString()
+                },
+                tokenInfo: {
+                    symbol: data.symbol,
+                    name: data.name
+                },
+                mlAnalysis: data.mlAnalysis,
+                risk: {
+                    level: data.riskLevel,
+                    score: data.riskScore
+                }
+            };
+            
+            this.tooltip.innerHTML = this.renderMonitoringData(monitoringData);
         } catch (error) {
             console.error('Error fetching monitoring data:', error);
             if (this.isVisible) {

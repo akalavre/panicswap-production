@@ -45,10 +45,30 @@ PanicSwap-php/
 ## Features
 
 - **Responsive Design**: Built with Tailwind CSS (via CDN) for mobile-first responsive design
-- **Wallet Integration**: Connect with Phantom and other Solana wallets
+- **Dual Protection Modes**: Choose between Full Protection or Watch-Only Mode
+- **Wallet Integration**: Connect with Phantom and other Solana wallets, or monitor addresses manually
 - **Real-time Updates**: Dynamic content updates without page refresh
 - **Component-based**: Modular PHP components for easy maintenance
 - **No Build Process**: Uses CDN for all dependencies
+
+## Protection Modes
+
+PanicSwap offers two distinct protection modes to suit different user needs:
+
+### 🛡️ Full Protection Mode
+- **Automatic Emergency Swaps**: Instantly executes swaps when rug pulls are detected
+- **Private Key Required**: Requires wallet connection for transaction signing
+- **Premium Feature**: Available with Pro, Enterprise, or Degen-Mode subscriptions
+- **Complete Protection**: Monitoring + Alerts + Automatic Actions
+
+### 👁️ Watch-Only Mode  
+- **Monitoring & Alerts**: Real-time threat detection and notifications
+- **No Private Key Needed**: Monitor any wallet address without connecting
+- **Manual Address Entry**: Simply enter a Solana wallet address to start monitoring
+- **Free Tier Available**: Basic monitoring included in free plans
+- **Manual Action Required**: Users receive alerts but must execute trades manually
+
+> **Important**: Watch-Only Mode provides comprehensive monitoring and alerting but does not execute automatic swaps. Users will receive immediate notifications of potential threats and must take manual action to protect their assets.
 
 ## Development
 

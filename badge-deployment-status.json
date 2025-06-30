@@ -1,0 +1,13 @@
+{
+    "deployment_id": "badge-fix-20250626104134",
+    "feature_name": "atomic_badge_renderer",
+    "start_time": "2025-06-26 10:41:34",
+    "status": "MONITORING",
+    "deployed_at": "2025-06-26 10:41:34",
+    "instructions": [
+        "Monitor badge behavior on token list v3",
+        "Watch browser console for oscillation warnings",
+        "Check for \"redundant update\" messages",
+        "Look for any badge flicker or incorrect states"
+    ]
+}

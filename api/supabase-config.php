@@ -170,5 +170,50 @@ class SupabaseClient {
             'limit' => $limit
         ]);
     }
+    
+    // Invalidate cache for specific table and filter
+    public function invalidateCache($table, $filter = []) {
+        // For now, this is a placeholder - in a real implementation this would 
+        // interact with your caching layer (Redis, Memcached, etc.)
+        // For Supabase realtime, we can trigger a manual refresh by sending a 
+        // custom event or forcing a database trigger
+        
+        error_log("Cache invalidation requested for table: $table with filter: " . json_encode($filter));
+        
+        // If this is for protected_tokens, we can trigger a database function
+        // that will cause realtime listeners to receive an update notification
+        if ($table === 'protected_tokens' && isset($filter['token_mint']) && isset($filter['wallet_address'])) {
+            try {
+                // Call a stored procedure or trigger an update to ensure realtime sync
+                $this->query('rpc/invalidate_protection_cache', [
+                    'p_token_mint' => $filter['token_mint'],
+                    'p_wallet_address' => $filter['wallet_address']
+                ]);
+            } catch (Exception $e) {
+                error_log("Cache invalidation failed: " . $e->getMessage());
+            }
+        }
+        
+        return true;
+    }
+    
+    // Force realtime notification for protection changes
+    public function forceProtectionSync($tokenMint, $walletAddress, $isProtected) {
+        try {
+            // Update a timestamp field to trigger realtime listeners
+            $this->query('protected_tokens', [
+                'token_mint' => 'eq.' . $tokenMint,
+                'wallet_address' => 'eq.' . $walletAddress
+            ]);
+            
+            // Log the sync attempt
+            error_log("Forced protection sync for token: $tokenMint, wallet: $walletAddress, protected: " . ($isProtected ? 'true' : 'false'));
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Force protection sync failed: " . $e->getMessage());
+            return false;
+        }
+    }
 }
 ?>

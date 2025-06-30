@@ -1,4 +1,4 @@
-import { Connection, PublicKey, AccountInfo } from '@solana/web3.js';
+import { Connection, PublicKey, AccountInfo, VersionedTransaction } from '@solana/web3.js';
 import config from '../config';
 import { RaydiumPoolDecoder } from './pool-decoders/RaydiumPoolDecoder';
 import { PumpFunPoolDecoder } from './pool-decoders/PumpFunPoolDecoder';
@@ -13,6 +13,7 @@ import { rugCheckPollingServiceV2 } from './RugCheckPollingServiceV2';
 import { getJupiterPriceUrl, getJupiterFetchOptions } from '../utils/jupiterEndpoints';
 import { monitoringStatsService } from './MonitoringStatsService';
 import { liquidityVelocityTracker } from './LiquidityVelocityTracker';
+import { canExecuteSwaps } from '../utils/subscriptionUtils';
 
 interface PoolData {
   poolAddress: string;
@@ -437,7 +438,7 @@ export class PoolMonitoringService {
       }
       
       // Clear cached transactions
-      await transactionCache.invalidateToken(tokenMint, userWallet);
+      await transactionCache.invalidateToken(tokenMint);
 
       // Remove from monitored pools
       this.monitoredPools.delete(poolAddress);
@@ -791,9 +792,13 @@ export class PoolMonitoringService {
           );
           
           if (cached) {
+            // Deserialize transaction from base64
+            const txBuffer = Buffer.from(cached.transaction, 'base64');
+            const transaction = VersionedTransaction.deserialize(txBuffer);
+            
             // Send via priority sender
             const result = await prioritySender.sendEmergencyTransaction(
-              cached.transaction,
+              transaction,
               null as any, // Signer would be retrieved securely
               {
                 jitoTipAmount: 100000, // 0.0001 SOL tip
@@ -1000,13 +1005,29 @@ export class PoolMonitoringService {
           console.error('Error triggering risk recalculation:', error);
         }
         
-        // Trigger emergency sell through broadcast
-        await broadcastService.broadcastProtectionExecution({
-          tokenMint: poolData.tokenMint,
-          walletAddress: '*', // Will be handled by subscribers
-          action: 'emergency_sell',
-          reason: `Liquidity dropped ${liquidityChange.toFixed(2)}%`
-        });
+        // Trigger emergency sell through broadcast but only for full protection users
+        const { data: protectedWallets } = await supabase
+          .from('protected_tokens')
+          .select('wallet_address')
+          .eq('token_mint', poolData.tokenMint)
+          .eq('is_active', true);
+        
+        if (protectedWallets) {
+          for (const protectedWallet of protectedWallets) {
+            const canExecute = await canExecuteSwaps(protectedWallet.wallet_address);
+            if (canExecute) {
+              await broadcastService.broadcastProtectionExecution({
+                tokenMint: poolData.tokenMint,
+                walletAddress: protectedWallet.wallet_address,
+                action: 'emergency_sell',
+                reason: `Liquidity dropped ${liquidityChange.toFixed(2)}%`
+              });
+            } else {
+              console.log(`[PoolMonitoring] Watch-only user ${protectedWallet.wallet_address} - sending alert only`);
+              // Alert will be sent via rugpull_alerts table insert above
+            }
+          }
+        }
       } else if (liquidityChange > 10) {
         // Warning level - use price alert for low severity
         await broadcastService.broadcastPriceAlert({

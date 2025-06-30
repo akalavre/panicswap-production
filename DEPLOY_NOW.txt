@@ -1,0 +1,303 @@
+PANICSWAP DEPLOYMENT - COPY & PASTE INSTRUCTIONS
+================================================
+
+Step 1: SSH into your droplet
+-----------------------------
+ssh root@157.230.227.111
+
+
+Step 2: Run this complete deployment command (copy entire block)
+---------------------------------------------------------------
+
+bash -c 'cat > /tmp/deploy.sh << '\''DEPLOY_SCRIPT'\''
+#!/bin/bash
+set -e
+
+echo "=== PanicSwap Automated Deployment Starting ==="
+
+# Update system
+apt update && apt upgrade -y
+apt install -y curl git nginx ufw wget unzip
+
+# Install Docker
+if ! command -v docker &> /dev/null; then
+    curl -fsSL https://get.docker.com | sh
+fi
+
+# Install Docker Compose
+if ! command -v docker-compose &> /dev/null; then
+    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+fi
+
+# Start Docker
+systemctl start docker && systemctl enable docker
+
+# Configure firewall
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 3001/tcp
+ufw --force enable
+
+# Setup application
+mkdir -p /opt/panicswap && cd /opt/panicswap
+
+# Download the application code
+wget -qO- https://github.com/akalavre/PanicSwap-php/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 || {
+    # Fallback: create minimal structure
+    mkdir -p api assets backend components config
+}
+
+# Create docker-compose.production.yml
+cat > docker-compose.production.yml << '\''COMPOSE'\''
+version: '\''3.8'\''
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: panicswap-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./logs/apache:/var/log/apache2
+    environment:
+      - APP_ENV=production
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - panicswap-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: panicswap-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./logs/backend:/app/logs
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - panicswap-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: panicswap-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - panicswap-network
+
+networks:
+  panicswap-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+COMPOSE
+
+# Create Dockerfile for frontend
+cat > Dockerfile << '\''DOCKERFILE'\''
+FROM php:8.2-apache
+
+RUN apt-get update && apt-get install -y \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    zip \
+    unzip \
+    git \
+    curl \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd pdo pdo_mysql \
+    && a2enmod rewrite headers
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+COPY . .
+
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
+
+RUN if [ -f composer.json ]; then composer install --no-dev --optimize-autoloader; fi
+
+COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
+
+EXPOSE 80
+
+CMD ["apache2-foreground"]
+DOCKERFILE
+
+# Create backend Dockerfile
+mkdir -p backend
+cat > backend/Dockerfile << '\''BACKEND_DOCKERFILE'\''
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+EXPOSE 3001
+
+CMD ["npm", "start"]
+BACKEND_DOCKERFILE
+
+# Create apache config
+cat > apache-config.conf << '\''APACHE'\''
+<VirtualHost *:80>
+    DocumentRoot /var/www/html
+    
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+APACHE
+
+# Create health check file
+cat > health.php << '\''HEALTH'\''
+<?php
+http_response_code(200);
+echo "OK";
+HEALTH
+
+# Create environment file
+cat > .env << '\''ENV'\''
+# Supabase Configuration
+SUPABASE_URL=https://cfficjjdhgqwqprfhlrj.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1NjQwMTUsImV4cCI6MjA1MDE0MDAxNX0.yzotHIIuDQD5ItRvbJouHXBusO5YhC7reFRKc3U5aTI
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmZmljampkaGdxd3FwcmZobHJqIiwicm9sZSI6InNlcnZpY2UiLCJpYXQiOjE3MzQ1NjQwMTUsImV4cCI6MjA1MDE0MDAxNX0.B3M1CHICcyAqZlHuypPxRP-CmgotcrzP8LAOLmxvtHE
+
+# Helius Configuration
+HELIUS_API_KEY=59c732de-1ad6-4c48-834f-aa6a90b06e8d
+HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=59c732de-1ad6-4c48-834f-aa6a90b06e8d
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_UPDATE_ME
+STRIPE_PUBLISHABLE_KEY=pk_test_UPDATE_ME
+STRIPE_PUBLIC_KEY=pk_test_UPDATE_ME
+STRIPE_WEBHOOK_SECRET=whsec_UPDATE_ME
+
+# JWT Configuration
+JWT_SECRET=fJ8aK2mN4pQ6sT8vX1yB3dG5hL7kM9nR
+
+# App Configuration
+APP_URL=http://157.230.227.111
+NODE_ENV=production
+PORT=3001
+
+# Redis Configuration
+REDIS_ENABLED=true
+UPSTASH_REDIS_REST_URL=https://closing-anchovy-26116.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AW5MAAIncDEzMGFlODUzYjQ3OWE0NTBkYTZhMjI3MzEwNTFiZDFkMXAxMjYxMTY
+
+# Telegram Configuration
+TELEGRAM_BOT_TOKEN=7901450197:AAFbTPHy4hS83Ut7F83Yq0UzrxjP4jFhhRo
+
+# RapidAPI
+RAPIDAPI_KEY=569a7556f4msh8d57a65d8b82bd4p172d03jsnd997df914e22
+
+# Alchemy RPC
+ALCHEMY_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/wD6F0K0ST4wj8JBmMsT5qb47oN3Dm7Mj
+
+# ML Configuration
+ML_ENABLED=true
+ML_UPDATE_INTERVAL_MS=45000
+ENV
+
+# Copy env to backend
+cp .env backend/.env
+
+# Configure Nginx
+cat > /etc/nginx/sites-available/panicswap << '\''NGINX'\''
+server {
+    listen 80;
+    server_name 157.230.227.111;
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:3001/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ws {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINX
+
+ln -sf /etc/nginx/sites-available/panicswap /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+systemctl restart nginx
+
+# Build and start
+echo "Building containers..."
+docker-compose -f docker-compose.production.yml build
+
+echo "Starting PanicSwap..."
+docker-compose -f docker-compose.production.yml up -d
+
+echo "=== Deployment Complete! ==="
+echo "Access at: http://157.230.227.111"
+echo "Update Stripe keys in: /opt/panicswap/.env"
+
+DEPLOY_SCRIPT
+chmod +x /tmp/deploy.sh && /tmp/deploy.sh'
+
+
+Step 3: After deployment completes
+----------------------------------
+1. Your app will be running at: http://157.230.227.111
+2. Update Stripe keys: nano /opt/panicswap/.env
+3. Restart after updating: docker-compose -f /opt/panicswap/docker-compose.production.yml restart
+
+Monitoring Commands:
+- View logs: docker-compose -f /opt/panicswap/docker-compose.production.yml logs -f
+- Check status: docker ps
+- Restart app: systemctl restart nginx && docker-compose -f /opt/panicswap/docker-compose.production.yml restart

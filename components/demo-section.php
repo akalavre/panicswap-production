@@ -11,7 +11,7 @@
             type="text" 
             id="demo-token-input"
         >
-        <button class="btn-primary px-6 py-2 text-sm font-medium" onclick="startDemo(event)">
+        <button class="btn-primary px-6 py-2 text-sm font-medium" onclick="processDemo(event)">
             Demo
         </button>
     </div>

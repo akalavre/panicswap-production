@@ -83,7 +83,7 @@
         
         <!-- Action Buttons -->
         <div class="mt-6 flex flex-wrap gap-3">
-            <button id="manage-subscription-btn" class="btn btn-secondary" onclick="window.location.href='subscription.php'">
+            <button id="manage-subscription-btn" class="btn btn-secondary" onclick="window.location.href='/subscription'">
                 <i class="fas fa-cog mr-2"></i>Manage Subscription
             </button>
             
@@ -100,9 +100,9 @@
 
 <!-- Cancel Subscription Modal -->
 <div id="cancel-subscription-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="hideCancelModal()"></div>
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onclick="hideCancelModal()"></div>
     <div class="relative z-10 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-gray-900 rounded-2xl border border-gray-800 max-w-md w-full p-6">
+        <div class="danger-card max-w-md w-full p-6 animate-scale-in">
             <h3 class="text-xl font-bold text-white mb-4">Cancel Subscription?</h3>
             <p class="text-gray-400 mb-6">
                 Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period.
@@ -122,7 +122,7 @@
                 <button class="btn btn-secondary flex-1" onclick="hideCancelModal()">
                     Keep Subscription
                 </button>
-                <button class="btn bg-red-600 hover:bg-red-700 text-white flex-1" onclick="confirmCancelSubscription()">
+                <button class="btn btn-danger flex-1" onclick="confirmCancelSubscription()">
                     Yes, Cancel
                 </button>
             </div>
@@ -181,11 +181,38 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function showCancelModal() {
-    document.getElementById('cancel-subscription-modal').classList.remove('hidden');
+    const modal = document.getElementById('cancel-subscription-modal');
+    const modalContent = modal.querySelector('.danger-card');
+    
+    // Remove pointer-events-none to allow interaction
+    document.body.style.pointerEvents = 'auto';
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    
+    // Trigger scale-in animation
+    if (modalContent) {
+        modalContent.classList.add('animate-scale-in');
+    }
 }
 
 function hideCancelModal() {
-    document.getElementById('cancel-subscription-modal').classList.add('hidden');
+    const modal = document.getElementById('cancel-subscription-modal');
+    const modalContent = modal.querySelector('.danger-card');
+    
+    if (modalContent) {
+        // Remove scale-in and add scale-out
+        modalContent.classList.remove('animate-scale-in');
+        modalContent.classList.add('animate-scale-out');
+        
+        // Wait for animation to complete
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            modalContent.classList.remove('animate-scale-out');
+        }, 300);
+    } else {
+        modal.classList.add('hidden');
+    }
 }
 
 async function confirmCancelSubscription() {

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal Modal Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body { background: #111; color: #fff; }</style>
+</head>
+<body class="p-8">
+    <h1 class="text-2xl mb-4">Minimal Protection Modal Test</h1>
+    
+    <button 
+        onclick="openModal()"
+        class="px-4 py-2 bg-blue-600 rounded mb-4">
+        Open Modal Directly
+    </button>
+    
+    <button 
+        data-protection-settings
+        data-mint="test-mint"
+        data-symbol="TEST"
+        class="px-4 py-2 bg-green-600 rounded mb-4">
+        Settings Button (Event Delegation)
+    </button>
+    
+    <div id="log" class="mt-4 p-4 bg-gray-800 rounded"></div>
+    
+    <!-- Simplified modal -->
+    <div id="protection-settings-modal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-black/80" onclick="closeModal()"></div>
+        <div class="fixed inset-0 flex items-center justify-center p-4">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                <h2 class="text-xl mb-4">Protection Settings</h2>
+                <p>Modal is working!</p>
+                <button onclick="closeModal()" class="mt-4 px-4 py-2 bg-red-600 rounded">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const log = (msg) => {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        };
+        
+        // Define the modal function
+        window.openProtectionSettings = function(tokenMint, tokenSymbol) {
+            log(`openProtectionSettings called with: ${tokenSymbol} (${tokenMint})`);
+            document.getElementById('protection-settings-modal').classList.remove('hidden');
+        };
+        
+        function openModal() {
+            log('Direct open button clicked');
+            window.openProtectionSettings('test-mint', 'TEST');
+        }
+        
+        function closeModal() {
+            log('Closing modal');
+            document.getElementById('protection-settings-modal').classList.add('hidden');
+        }
+        
+        // Event delegation
+        document.addEventListener('click', function(e) {
+            const settingsBtn = e.target.closest('[data-protection-settings]');
+            if (settingsBtn) {
+                log('Settings button clicked via event delegation');
+                const tokenMint = settingsBtn.dataset.mint;
+                const tokenSymbol = settingsBtn.dataset.symbol;
+                
+                if (window.openProtectionSettings) {
+                    window.openProtectionSettings(tokenMint, tokenSymbol);
+                } else {
+                    log('ERROR: openProtectionSettings not found!');
+                }
+            }
+        });
+        
+        // Initial check
+        log('Page loaded');
+        log('openProtectionSettings exists: ' + (typeof window.openProtectionSettings === 'function'));
+    </script>
+</body>
+</html>

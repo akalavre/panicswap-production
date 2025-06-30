@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Token Loading</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #333;
+            background: #1a1a1a;
+            border-radius: 8px;
+        }
+        .error {
+            color: #ff4444;
+        }
+        .success {
+            color: #44ff44;
+        }
+        .info {
+            color: #4444ff;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <h1>PanicSwap Token Loading Debugger</h1>
+    
+    <div class="section">
+        <h2>1. Wallet Connection Status</h2>
+        <div id="wallet-status"></div>
+        <button onclick="checkWalletConnection()">Check Wallet</button>
+        <button onclick="simulateWalletConnection()">Simulate Connection</button>
+    </div>
+
+    <div class="section">
+        <h2>2. Supabase Connection</h2>
+        <div id="supabase-status"></div>
+        <button onclick="checkSupabase()">Check Supabase</button>
+    </div>
+
+    <div class="section">
+        <h2>3. Backend API Test</h2>
+        <div id="backend-status"></div>
+        <button onclick="testBackendAPI()">Test Backend API</button>
+    </div>
+
+    <div class="section">
+        <h2>4. Monitoring API Test</h2>
+        <div id="monitoring-status"></div>
+        <button onclick="testMonitoringAPI()">Test Monitoring API</button>
+    </div>
+
+    <div class="section">
+        <h2>5. Token Data Flow</h2>
+        <div id="token-flow"></div>
+        <button onclick="testFullTokenFlow()">Test Full Token Flow</button>
+    </div>
+
+    <div class="section">
+        <h2>Console Output</h2>
+        <pre id="console-output"></pre>
+    </div>
+
+    <!-- Include Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/supabase-client.js"></script>
+    <script src="assets/js/backend-config.js"></script>
+    
+    <script>
+        // Override console.log to capture output
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('console-output');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg
+            ).join(' ');
+            consoleOutput.textContent += message + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        // Test functions
+        function checkWalletConnection() {
+            const status = document.getElementById('wallet-status');
+            status.innerHTML = '';
+            
+            // Check localStorage
+            const walletAddress = localStorage.getItem('walletAddress');
+            const walletType = localStorage.getItem('walletType');
+            
+            status.innerHTML += `<div class="info">localStorage wallet address: ${walletAddress || 'Not found'}</div>`;
+            status.innerHTML += `<div class="info">localStorage wallet type: ${walletType || 'Not found'}</div>`;
+            
+            // Check window.walletState
+            if (window.walletState) {
+                const state = window.walletState.getState();
+                status.innerHTML += `<div class="info">walletState exists: YES</div>`;
+                status.innerHTML += `<pre>${JSON.stringify(state, null, 2)}</pre>`;
+            } else {
+                status.innerHTML += `<div class="error">walletState exists: NO</div>`;
+            }
+        }
+
+        function simulateWalletConnection() {
+            const testAddress = '6PP4BH39zThbjRU8XhJ9AwXRqPyGjqCxwftemXYXSwvG';
+            localStorage.setItem('walletAddress', testAddress);
+            localStorage.setItem('walletType', 'phantom');
+            
+            if (window.walletState) {
+                window.walletState._updateState({
+                    connected: true,
+                    address: testAddress
+                });
+            }
+            
+            alert('Simulated wallet connection. Please refresh the page.');
+        }
+
+        async function checkSupabase() {
+            const status = document.getElementById('supabase-status');
+            status.innerHTML = '';
+            
+            if (!window.supabaseClient) {
+                status.innerHTML = '<div class="error">Supabase client not found!</div>';
+                return;
+            }
+            
+            status.innerHTML += '<div class="success">Supabase client found</div>';
+            
+            try {
+                // Test query
+                const { data, error } = await supabaseClient
+                    .from('wallet_tokens')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    status.innerHTML += `<div class="error">Query error: ${error.message}</div>`;
+                } else {
+                    status.innerHTML += '<div class="success">Supabase connection successful</div>';
+                }
+            } catch (e) {
+                status.innerHTML += `<div class="error">Exception: ${e.message}</div>`;
+            }
+        }
+
+        async function testBackendAPI() {
+            const status = document.getElementById('backend-status');
+            status.innerHTML = '';
+            
+            const backendUrl = window.BACKEND_URL || 'http://localhost:3001';
+            status.innerHTML += `<div class="info">Backend URL: ${backendUrl}</div>`;
+            
+            try {
+                const response = await fetch(`${backendUrl}/api/health`);
+                if (response.ok) {
+                    status.innerHTML += '<div class="success">Backend is running</div>';
+                } else {
+                    status.innerHTML += `<div class="error">Backend returned status: ${response.status}</div>`;
+                }
+            } catch (e) {
+                status.innerHTML += `<div class="error">Cannot connect to backend: ${e.message}</div>`;
+                status.innerHTML += '<div class="info">Make sure the Node.js backend is running on port 3001</div>';
+            }
+        }
+
+        async function testMonitoringAPI() {
+            const status = document.getElementById('monitoring-status');
+            status.innerHTML = '';
+            
+            const testToken = 'A7m1dVCw1PXKxZTk8DJDQqUQAERTgWDhzGwVQp8apump';
+            const testWallet = localStorage.getItem('walletAddress') || '6PP4BH39zThbjRU8XhJ9AwXRqPyGjqCxwftemXYXSwvG';
+            
+            const url = `api/monitoring-status.php/${testToken}?wallet=${testWallet}`;
+            status.innerHTML += `<div class="info">Testing URL: ${url}</div>`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                status.innerHTML += `<div class="info">Response status: ${response.status}</div>`;
+                
+                try {
+                    const data = JSON.parse(text);
+                    status.innerHTML += '<div class="success">Valid JSON response</div>';
+                    status.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } catch (e) {
+                    status.innerHTML += '<div class="error">Invalid JSON response</div>';
+                    status.innerHTML += `<pre>${text.substring(0, 500)}</pre>`;
+                }
+            } catch (e) {
+                status.innerHTML += `<div class="error">Fetch error: ${e.message}</div>`;
+            }
+        }
+
+        async function testFullTokenFlow() {
+            const flow = document.getElementById('token-flow');
+            flow.innerHTML = '<h3>Testing full token loading flow...</h3>';
+            
+            // Step 1: Check wallet
+            const walletAddress = localStorage.getItem('walletAddress');
+            if (!walletAddress) {
+                flow.innerHTML += '<div class="error">Step 1 FAILED: No wallet address</div>';
+                return;
+            }
+            flow.innerHTML += `<div class="success">Step 1 OK: Wallet ${walletAddress}</div>`;
+            
+            // Step 2: Load tokens from Supabase
+            try {
+                const { data: walletTokens, error } = await supabaseClient
+                    .from('wallet_tokens')
+                    .select('*')
+                    .eq('wallet_address', walletAddress);
+                
+                if (error) throw error;
+                
+                flow.innerHTML += `<div class="success">Step 2 OK: Found ${walletTokens.length} tokens</div>`;
+                
+                if (walletTokens.length === 0) {
+                    flow.innerHTML += '<div class="error">No tokens found for this wallet</div>';
+                    return;
+                }
+                
+                // Step 3: Test monitoring API for first token
+                const firstToken = walletTokens[0];
+                flow.innerHTML += `<div class="info">Step 3: Testing token ${firstToken.token_mint}</div>`;
+                
+                const url = `api/monitoring-status.php/${firstToken.token_mint}?wallet=${walletAddress}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    flow.innerHTML += `<div class="error">Step 3 FAILED: API returned ${response.status}</div>`;
+                    return;
+                }
+                
+                const monitoringData = await response.json();
+                flow.innerHTML += '<div class="success">Step 3 OK: Got monitoring data</div>';
+                flow.innerHTML += `<pre>${JSON.stringify(monitoringData, null, 2)}</pre>`;
+                
+            } catch (e) {
+                flow.innerHTML += `<div class="error">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Auto-run checks on load
+        window.addEventListener('load', () => {
+            checkWalletConnection();
+            checkSupabase();
+        });
+    </script>
+</body>
+</html>

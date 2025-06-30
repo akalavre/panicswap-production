@@ -28,21 +28,21 @@ define('STRIPE_PRICES', [
         'amount' => 7900, // $79.00
         'currency' => 'usd',
         'interval' => 'month',
-        'description' => 'Up to 50 tokens, < 2s response time'
+        'description' => '5 tokens, < 2s response time'
     ],
     'degen' => [
         'name' => 'Degen Mode',
         'amount' => 14900, // $149.00
         'currency' => 'usd',
         'interval' => 'month',
-        'description' => 'Up to 100 tokens, < 1s response, Pump.fun integration'
+        'description' => '10 tokens, < 1s response, Pump.fun integration'
     ],
     'enterprise' => [
         'name' => 'Enterprise Plan',
         'amount' => 39900, // $399.00
         'currency' => 'usd',
         'interval' => 'month',
-        'description' => 'Unlimited tokens, all DEXs, dedicated support'
+        'description' => '25 tokens, all DEXs, dedicated support'
     ]
 ]);
 

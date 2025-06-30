@@ -39,7 +39,13 @@
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                Up to 5 tokens
+                                1 token (just try it out)
+                            </li>
+                            <li class="flex items-center text-sm text-gray-300">
+                                <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Telegram alerts
                             </li>
                             <li class="flex items-center text-sm text-gray-300">
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +108,7 @@
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                Up to 50 tokens
+                                5 tokens
                             </li>
                             <li class="flex items-center text-sm text-gray-300">
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +177,13 @@
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                Up to 100 tokens
+10 tokens
+                            </li>
+                            <li class="flex items-center text-sm text-gray-300">
+                                <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Telegram alerts
                             </li>
                             <li class="flex items-center text-sm text-gray-300">
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +244,13 @@
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                 </svg>
-                                Unlimited protection
+25 tokens
+                            </li>
+                            <li class="flex items-center text-sm text-gray-300">
+                                <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Telegram alerts
                             </li>
                             <li class="flex items-center text-sm text-gray-300">
                                 <svg class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -382,10 +400,10 @@
                                 <div class="font-medium text-white">Protected Tokens</div>
                                 <div class="text-xs text-gray-500 mt-1">Number of tokens you can protect</div>
                             </td>
-                            <td class="text-center py-4 px-4 text-sm text-gray-300">Up to 5</td>
-                            <td class="text-center py-4 px-4 text-sm text-gray-300">Up to 50</td>
-                            <td class="text-center py-4 px-4 text-sm text-gray-300">Up to 100</td>
-                            <td class="text-center py-4 px-4 text-sm text-gray-300">Unlimited</td>
+                            <td class="text-center py-4 px-4 text-sm text-gray-300">1</td>
+                            <td class="text-center py-4 px-4 text-sm text-gray-300">5</td>
+                            <td class="text-center py-4 px-4 text-sm text-gray-300">10</td>
+                            <td class="text-center py-4 px-4 text-sm text-gray-300">25</td>
                         </tr>
 
                         <!-- Multi-Wallet Support -->

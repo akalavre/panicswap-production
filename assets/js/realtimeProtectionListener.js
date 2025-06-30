@@ -49,10 +49,28 @@
         // Extract token information
         const tokenMint = newRecord?.token_mint || oldRecord?.token_mint;
         const walletAddress = newRecord?.wallet_address || oldRecord?.wallet_address;
+        const updatedAt = newRecord?.updated_at;
         
         if (!tokenMint) {
             console.warn('No token mint in protection change payload');
             return;
+        }
+        
+        // Check if this update should be ignored due to recent optimistic changes
+        if (window.tokenListV3State && window.tokenListV3State.recentChanges) {
+            const recentChange = window.tokenListV3State.recentChanges.get(tokenMint);
+            
+            if (recentChange && updatedAt) {
+                const recentChangeTime = new Date(recentChange.timestamp);
+                const updateTime = new Date(updatedAt);
+                
+                // If the optimistic change is more recent than the database update,
+                // ignore this update to let the optimistic change win
+                if (recentChangeTime > updateTime) {
+                    console.log(`Ignoring older database update for ${tokenMint}. Optimistic change is newer.`);
+                    return;
+                }
+            }
         }
         
         // Determine the new protection state based on event type
@@ -83,9 +101,13 @@
                 return;
         }
         
-        // Step 3 Implementation: Call updateLocalToken and renderTokensV3
-        updateLocalToken(tokenMint, newState);
-        renderTokensV3();
+        // Update the local token state
+        updateTokenListState(tokenMint, newState.is_active === true);
+        
+        // Re-render tokens if the function is available
+        if (window.renderTokensV3) {
+            window.renderTokensV3();
+        }
         
         // Check if this change matches a recent optimistic update
         if (window.tokenListV3State && window.tokenListV3State.recentChanges) {

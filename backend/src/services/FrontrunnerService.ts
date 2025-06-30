@@ -185,9 +185,13 @@ export class FrontrunnerService extends EventEmitter {
       // Calculate priority fee based on threat
       const basePriorityFee = this.calculatePriorityFeeFromThreat(threat);
       
+      // Deserialize transaction from base64
+      const txBuffer = Buffer.from(cachedTx.transaction, 'base64');
+      const transaction = VersionedTransaction.deserialize(txBuffer);
+      
       // Execute with retries and escalating fees
       const result = await this.executeWithRetries(
-        cachedTx.transaction,
+        transaction,
         basePriorityFee,
         threat
       );
@@ -535,9 +539,13 @@ export class FrontrunnerService extends EventEmitter {
       threat.priorityFeeMultiplier
     );
     
+    // Deserialize transaction from base64
+    const txBuffer = Buffer.from(cached.transaction, 'base64');
+    const transaction = VersionedTransaction.deserialize(txBuffer);
+    
     // Execute with retries
     const result = await this.executeWithRetries(
-      cached.transaction,
+      transaction,
       basePriorityFee,
       threat
     );

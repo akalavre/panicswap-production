@@ -177,9 +177,9 @@ function fetchMonitoringRiskData($tokenMint) {
     $alerts = json_decode($response, true);
     
     if (empty($alerts)) {
-        // No active alerts = Safe
+        // No active alerts = null (let monitoring API determine badge state)
         return [
-            'risk_level' => 'Safe',
+            'risk_level' => null,
             'risk_score' => 0,
             'active_alerts' => [],
             'last_check' => date('c'),
@@ -189,7 +189,7 @@ function fetchMonitoringRiskData($tokenMint) {
     
     // Calculate risk from active alerts
     $maxRiskScore = 0;
-    $riskLevel = 'Safe';
+    $riskLevel = null;
     
     foreach ($alerts as $alert) {
         $alertScore = $alert['risk_score'] ?? 0;

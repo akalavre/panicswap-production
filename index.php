@@ -142,7 +142,11 @@ require_once 'config.php';
     
     <!-- JavaScript -->
     <script src="assets/js/supabase-config.js"></script>
+    <script src="assets/js/wallet-state.js"></script>
+    <script src="assets/js/global-wallet-restore.js"></script>
+    <script src="assets/js/components/wallet-status-component.js"></script>
     <script src="assets/js/wallet-adapter.js"></script>
+    <script src="assets/js/wallet-button-ui.js"></script>
     <script src="assets/js/protection-events.js"></script>
     <script src="assets/js/auto-sell.js"></script>
     <script src="assets/js/payment-config.js"></script>
